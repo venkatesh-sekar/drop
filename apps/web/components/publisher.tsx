@@ -369,7 +369,7 @@ export function Publisher({
           onDrop={(event) => void onDrop(event)}
           className={[
             "flex h-[45vh] min-h-64 w-full flex-col justify-end rounded-3xl border border-dashed p-7 text-left transition-colors outline-none sm:h-[55vh] sm:p-9",
-            dragging ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40",
+            dragging ? "border-primary bg-primary/5" : "border-foreground/20 hover:bg-muted/40",
             "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30",
           ].join(" ")}
         >

@@ -183,3 +183,15 @@ Folder upload: `<input type="file" webkitdirectory>` and drag-drop of a folder (
 - `@drop/core`: vitest unit tests for path normalization/reserved words, archive validation (traversal, single-folder strip, missing index, limits), mime.
 - `@drop/cli`: vitest for suggestPathFromFolder and arg parsing.
 - `scripts/smoke.sh`: end-to-end against a running stack with the mock provider: mint a dev token, deploy `examples/hello`, fetch it through the gateway, redeploy, PATCH expiry, delete.
+
+## Implementation notes (what shipped differs from the above in these places)
+
+- Mock sign-in posts to `/auth/mock/submit` because App Router does not allow a `route.ts` beside `page.tsx` in the same segment.
+- `deploySite` uploads under `sites/<siteId>/<deployId>/` before inserting the row for a new site, so a failed upload leaves no row. A lost race on the unique path deletes the fresh prefix and reports `path_taken`.
+- The one-shot CLI token is held in `cli_auth_requests.token` between approve and the first poll, then nulled. Only the hash lives in `cli_tokens`.
+- Changing expiry on an expired site that still has storage reactivates it.
+- The gateway registers GET and HEAD explicitly (Hono does not synthesize HEAD) and rejects `..`/`%2e%2e` on the raw request line before URL normalisation can collapse it.
+- `drop login` runs the browser flow even without a TTY; every other command in a non-TTY without a token exits 1 with `{"error":"unauthenticated"}`, which is what the MCP server keys off. `drop delete` without a TTY and without `--yes` proceeds.
+- The control image builds the whole workspace (no standalone output) because `drop-cleanup` runs `packages/core` scripts from the same image.
+- Credentials are a 0600 file under `~/.config/drop`; OS keychain storage is a follow-up.
+- OIDC provider code follows the openid-client v6 API but has not been run against a real issuer.
