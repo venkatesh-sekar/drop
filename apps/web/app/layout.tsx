@@ -1,15 +1,24 @@
-import { Geist, Geist_Mono, Inter } from "next/font/google"
+import type { Metadata } from "next"
+import { Geist_Mono, Inter } from "next/font/google"
 
 import "@workspace/ui/globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "@workspace/ui/lib/utils"
+import { Toaster } from "@workspace/ui/components/sonner"
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'})
+import { ThemeProvider } from "@/components/theme-provider"
+import { Header } from "@/components/header"
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
 })
+
+export const metadata: Metadata = {
+  title: "Drop",
+  description: "Drop a folder. Get a URL.",
+}
 
 export default function RootLayout({
   children,
@@ -22,8 +31,12 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
     >
-      <body>
-        <ThemeProvider>{children}</ThemeProvider>
+      <body className="min-h-svh">
+        <ThemeProvider>
+          <Header />
+          <main className="mx-auto w-full max-w-[720px] px-5 pb-24 sm:px-6">{children}</main>
+          <Toaster position="bottom-center" />
+        </ThemeProvider>
       </body>
     </html>
   )
