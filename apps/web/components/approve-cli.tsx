@@ -7,10 +7,13 @@ export function ApproveCli({
   code,
   hostname,
   email,
+  ttlDays,
 }: {
   code: string
   hostname: string
   email: string
+  /** How long the credential the CLI receives stays valid. */
+  ttlDays: number
 }) {
   const [state, setState] = React.useState<"asking" | "busy" | "approved" | "denied">("asking")
   const [failure, setFailure] = React.useState<string | null>(null)
@@ -61,8 +64,11 @@ export function ApproveCli({
       <h1 className="text-[2rem] leading-tight font-medium tracking-tight text-balance sm:text-[2.5rem]">
         Sign in to the Drop CLI on {hostname}?
       </h1>
-      <p className="mt-4 text-[15px] text-muted-foreground">
-        It will publish as {email} until you revoke it.
+      <p className="mt-4 max-w-[60ch] text-[15px] leading-relaxed text-muted-foreground">
+        A terminal on {hostname} ran <code>drop login</code>. Approving lets the <code>drop</code>{" "}
+        command on that machine publish and manage Drops as {email} for {ttlDays} days, or until{" "}
+        <code>drop logout</code> is run there. Nothing else on that machine gets access, and no
+        password is shared.
       </p>
 
       <p className="mt-10 text-3xl font-medium tracking-[0.12em] tabular-nums sm:text-4xl">

@@ -47,7 +47,19 @@ export default async function DropsPage() {
           </Link>
         </p>
       ) : (
-        <DropsList rows={rows} />
+        <>
+          <p className="mt-4 max-w-[60ch] text-[15px] leading-relaxed text-muted-foreground">
+            Everything you have published. An expired Drop is offline but the name is still yours;
+            redeploy to bring it back, or change its expiry from the menu.{" "}
+            <Link
+              href="/how-it-works#expiry"
+              className="rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+            >
+              How expiry works
+            </Link>
+          </p>
+          <DropsList rows={rows} />
+        </>
       )}
     </section>
   )

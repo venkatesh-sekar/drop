@@ -11,7 +11,14 @@ import {
   suggestPathFromFile,
 } from "@drop/core/paths"
 import { EXPIRY_PRESET_DAYS, type Expiry } from "@drop/core/expiry"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
 import { Button } from "@workspace/ui/components/button"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@workspace/ui/components/collapsible"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +35,7 @@ import {
 import { Switch } from "@workspace/ui/components/switch"
 
 import { copyText } from "@/components/copy-button"
+import { Hint } from "@/components/hint"
 import {
   CUSTOM_EXPIRY_HINT,
   CustomExpiryDialog,
@@ -39,7 +47,12 @@ import { formatBytes, expiryLabel } from "@/lib/time"
 /** One of the preset buttons, "custom" for a typed day count, or null to keep a Drop's current expiry. */
 type ExpiryChoice = `${(typeof EXPIRY_PRESET_DAYS)[number]}d` | "never" | "custom" | null
 
-const DEFAULT_EXPIRY_CHOICE: ExpiryChoice = "7d"
+/** The form's starting expiry: the preset matching the server default, or that many custom days. */
+function defaultExpiryChoice(days: number): Exclude<ExpiryChoice, null> {
+  return (EXPIRY_PRESET_DAYS as readonly number[]).includes(days)
+    ? (`${days}d` as `${(typeof EXPIRY_PRESET_DAYS)[number]}d`)
+    : "custom"
+}
 
 /** Select value standing in for "keep this Drop's current expiry" (a null choice). */
 const KEEP_EXPIRY = "keep"
@@ -52,11 +65,11 @@ function isExpirySelectValue(value: unknown): value is ExpirySelectValue {
 
 const expiryItems: Record<ExpirySelectValue, string> = {
   [KEEP_EXPIRY]: "Keep current expiry",
-  "7d": "7 days",
-  "30d": "30 days",
-  "60d": "60 days",
-  custom: "Custom",
-  never: "Never",
+  "7d": "Expires in 7 days",
+  "30d": "Expires in 30 days",
+  "60d": "Expires in 60 days",
+  custom: "Expires in…",
+  never: "Never expires",
 }
 
 interface PickedFile {
@@ -98,6 +111,10 @@ const IGNORED = (path: string): boolean => {
   const base = segments[segments.length - 1] ?? ""
   return base === ".DS_Store" || base === "Thumbs.db"
 }
+
+/** Text links inside the interface: underlined, quiet, with the shared focus ring. */
+const inlineLink =
+  "rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
 
 const isZipName = (name: string): boolean => /\.zip$/i.test(name)
 const isHtmlName = (name: string): boolean => /\.html?$/i.test(name)
@@ -224,19 +241,24 @@ export function Publisher({
   sitesHost,
   signedIn,
   initialPath,
+  defaultExpiryDays,
 }: {
   sitesHost: string
   signedIn: boolean
   initialPath: string
+  /** What a new Drop gets when nobody picks: the server's DEFAULT_EXPIRY_DAYS. */
+  defaultExpiryDays: number
 }) {
+  const defaultChoice = defaultExpiryChoice(defaultExpiryDays)
+  const defaultCustomDays = defaultChoice === "custom" ? String(defaultExpiryDays) : ""
   const [selection, setSelection] = React.useState<Selection | null>(null)
   const [path, setPath] = React.useState(initialPath)
   // Once the user has typed a name, a new drop must not overwrite it.
   const [pathEdited, setPathEdited] = React.useState(Boolean(initialPath))
   const [expiryChoice, setExpiryChoice] = React.useState<ExpiryChoice>(
-    initialPath ? null : DEFAULT_EXPIRY_CHOICE,
+    initialPath ? null : defaultChoice,
   )
-  const [customDays, setCustomDays] = React.useState("")
+  const [customDays, setCustomDays] = React.useState(initialPath ? "" : defaultCustomDays)
   const [customOpen, setCustomOpen] = React.useState(false)
   const [spa, setSpa] = React.useState(false)
   const [showMore, setShowMore] = React.useState(false)
@@ -465,8 +487,8 @@ export function Publisher({
     setResult(null)
     setPath("")
     setPathEdited(false)
-    setExpiryChoice(DEFAULT_EXPIRY_CHOICE)
-    setCustomDays("")
+    setExpiryChoice(defaultChoice)
+    setCustomDays(defaultCustomDays)
     setCustomOpen(false)
     setSpa(false)
     setShowMore(false)
@@ -502,12 +524,25 @@ export function Publisher({
         </div>
 
         {warnings.length > 0 ? (
-          <ul className="mt-7 space-y-1 text-[13px] text-muted-foreground">
-            {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
+          <div className="mt-7 text-[13px] text-muted-foreground">
+            <p className="font-medium text-foreground">Something to check</p>
+            <ul className="mt-1 space-y-1">
+              {warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+            <p className="mt-1">
+              <a href="/how-it-works#publish" className={inlineLink}>
+                How to fix it
+              </a>
+            </p>
+          </div>
         ) : null}
+
+        <p className="mt-7 max-w-[60ch] text-[15px] leading-relaxed text-muted-foreground">
+          Anyone on the network with this link can open it. To update the site, publish to the
+          same name again; the URL stays put. To take it down early, delete it from My Drops.
+        </p>
 
         <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
           <span className="flex items-center gap-2">
@@ -530,19 +565,24 @@ export function Publisher({
                 />
               </DropdownMenuContent>
             </DropdownMenu>
+            <Hint label="About expiry" more="expiry">
+              <p>
+                When it expires the site goes offline, but the name stays yours and publishing
+                again brings it back. Change the date here or from My Drops at any time.
+              </p>
+            </Hint>
           </span>
           <CustomExpiryDialog
             open={customOpen}
             onOpenChange={setCustomOpen}
             onSubmit={(next) => void changeExpiry(next)}
           />
-          <button
-            type="button"
-            onClick={reset}
-            className="rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
-          >
+          <button type="button" onClick={reset} className={inlineLink}>
             Publish another
           </button>
+          <a href="/drops" className={inlineLink}>
+            My Drops
+          </a>
         </div>
 
         {dragging ? (
@@ -595,22 +635,36 @@ export function Publisher({
             {dragging ? "Drop it." : signedIn ? "Drop a folder. Get a URL." : "Sign in to publish."}
           </span>
           <span className="mt-3 block text-[15px] text-muted-foreground">
-            Drag a folder, an HTML file or a .zip anywhere on this page, or click to choose a folder.
+            {signedIn
+              ? "Drag a folder, an HTML file or a .zip anywhere on this page, or click to choose a folder."
+              : `Sign in with your company account. Whatever you publish gets a URL on ${sitesHost} that anyone on the network can open.`}
           </span>
         </button>
       )}
 
       {!selection ? (
-        <p className="mt-3 text-[13px] text-muted-foreground">
-          Just one page?{" "}
-          <button
-            type="button"
-            onClick={() => fileInput.current?.click()}
-            className="rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
-          >
-            choose an HTML file or a .zip
-          </button>
-          . A single HTML file needs no index.html.
+        <p className="mt-3 flex flex-wrap items-center gap-x-1 text-[13px] text-muted-foreground">
+          <span>
+            Just one page?{" "}
+            <button type="button" onClick={() => fileInput.current?.click()} className={inlineLink}>
+              choose an HTML file or a .zip
+            </button>
+            .
+          </span>
+          <span className="inline-flex items-center gap-1">
+            What can I drop?
+            <Hint label="What can I drop?" more="publish">
+              <p>
+                Any built static site: a Vite, Next.js or Astro export, a docs build, plain HTML.
+                Point at the build output (dist, build, out), not the source. It needs index.html
+                at the top; that is the page people land on.
+              </p>
+              <p className="mt-2">
+                A single HTML file works on its own. A .zip is unpacked. Nothing that needs a
+                server can run here.
+              </p>
+            </Hint>
+          </span>
         </p>
       ) : null}
 
@@ -640,6 +694,15 @@ export function Publisher({
             }}
             className="min-w-0 flex-1 basis-48 rounded-sm bg-transparent py-1 outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/30"
           />
+          <Hint label="About the name" more="names" className="self-center">
+            <p>
+              This is the URL. Lowercase letters, numbers and hyphens; Drop tidies what you type.
+            </p>
+            <p className="mt-2">
+              Whoever publishes a name first owns it. Publish to your own name again to replace
+              the site at the same URL. Deleting it frees the name for anyone.
+            </p>
+          </Hint>
         </div>
         {path && pathError ? (
           <p className="mt-2 text-sm text-destructive">{pathError}</p>
@@ -656,6 +719,7 @@ export function Publisher({
         ) : null}
       </div>
 
+      <Collapsible open={showMore} onOpenChange={setShowMore}>
       <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="drop-expiry" className="sr-only">
@@ -702,16 +766,26 @@ export function Publisher({
               <span className="text-sm text-muted-foreground">days</span>
             </span>
           ) : null}
+          <Hint label="About expiry" more="expiry">
+            <p>
+              Drops are temporary unless you say otherwise. When it expires the site goes
+              offline, but the name stays yours and publishing again brings it back.
+            </p>
+            <p className="mt-2">
+              You can change this any time from My Drops. Never expires keeps it up until you
+              delete it.
+            </p>
+          </Hint>
         </div>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-expanded={showMore}
-          onClick={() => setShowMore((value) => !value)}
-        >
-          More
-        </Button>
+        <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
+          More options
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            strokeWidth={2}
+            className={`transition-transform ${showMore ? "rotate-180" : ""}`}
+          />
+        </CollapsibleTrigger>
 
         <div className="ml-auto">
           <Button disabled={!canPublish && signedIn} onClick={() => void publish()}>
@@ -730,19 +804,28 @@ export function Publisher({
         <p className="mt-3 text-[13px] text-muted-foreground">{CUSTOM_EXPIRY_HINT}</p>
       ) : null}
 
-      {showMore ? (
+      <CollapsibleContent>
         <div className="mt-6 flex items-start gap-3">
           <Switch id="drop-spa" checked={spa} onCheckedChange={setSpa} />
           <div>
-            <label htmlFor="drop-spa" className="text-sm font-medium">
+            <label htmlFor="drop-spa" className="inline-flex items-center gap-1.5 text-sm font-medium">
               Single-page app
+              <Hint label="About single-page apps" more="publish">
+                <p>
+                  Turn this on if your app has a client-side router (React Router, Vue Router and
+                  the like). Drop then serves index.html for URLs that have no file, so a deep
+                  link like /{path || "name"}/settings loads instead of 404ing.
+                </p>
+                <p className="mt-2">Leave it off for ordinary sites, where a real 404 helps.</p>
+              </Hint>
             </label>
             <p className="text-[13px] text-muted-foreground">
               Serve index.html for unknown routes, so deep links into a client-side router work.
             </p>
           </div>
         </div>
-      ) : null}
+      </CollapsibleContent>
+      </Collapsible>
 
       {failure ? <p className="mt-6 text-sm text-destructive">{failure}</p> : null}
     </section>

@@ -15,16 +15,22 @@ COPY packages/core/package.json packages/core/
 COPY packages/ui/package.json packages/ui/
 COPY packages/typescript-config/package.json packages/typescript-config/
 COPY packages/eslint-config/package.json packages/eslint-config/
-RUN CI=true pnpm install --frozen-lockfile --filter web...
+COPY packages/cli/package.json packages/cli/
+COPY packages/mcp/package.json packages/mcp/
+# The CLI and MCP server are built here too: the control app serves them at /install.
+RUN CI=true pnpm install --frozen-lockfile --filter web... --filter @drop/cli --filter @drop/mcp
 
 COPY packages/typescript-config packages/typescript-config
 COPY packages/eslint-config packages/eslint-config
 COPY packages/ui packages/ui
 COPY packages/core packages/core
+COPY packages/cli packages/cli
+COPY packages/mcp packages/mcp
+COPY skills/drop skills/drop
 COPY migrations migrations
 COPY apps/web apps/web
 # The build reads nothing from the database; env comes from the container at runtime.
-RUN pnpm --filter web build
+RUN pnpm --filter @drop/cli --filter @drop/mcp build && pnpm --filter web build
 
 # ---- runtime ------------------------------------------------------------
 FROM base AS runtime

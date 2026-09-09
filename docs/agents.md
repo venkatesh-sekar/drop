@@ -10,7 +10,20 @@ MCP server, the skill — is a wrapper around the same commands.
 
 ## 1. Install the CLI
 
-From a checkout of this repo:
+The control app serves a single-file build of the CLI and an installer. This is the way to
+give it to someone who does not have the repo:
+
+```bash
+curl -fsSL https://drop.internal/install | sh
+```
+
+It needs Node 20 or newer, downloads `drop.js` and `drop-mcp.js` into `~/.drop/lib`, writes
+two-line wrappers `drop` and `drop-mcp` into `~/.local/bin` (`DROP_BIN_DIR` overrides), and
+writes the control URL into `~/.config/drop/config.json`, so `drop login` needs no `--url`.
+Run the same line again to update. The served files are `/install` (the script),
+`/install/drop.js`, `/install/drop-mcp.js` and `/install/SKILL.md`.
+
+From a checkout of this repo instead:
 
 ```bash
 pnpm install
@@ -110,13 +123,16 @@ credential it exits 1 with
 `drop_delete`, `drop_whoami` — each of which shells out to the `drop` CLI with
 `--json --yes`. It never touches credentials itself.
 
+The installer above puts `drop-mcp` next to `drop`. From a checkout:
+
 ```bash
 pnpm --filter @drop/mcp build
 npm i -g ./packages/mcp      # provides `drop-mcp`
 ```
 
-It finds the CLI via `DROP_CLI` → `drop` on `PATH` → `../cli/dist/drop.js` next to
-its own bundle, and passes `DROP_URL` / `DROP_TOKEN` straight through.
+It finds the CLI via `DROP_CLI` → `drop` on `PATH` → a `drop.js` beside its own file (the
+installer's layout) → `../cli/dist/drop.js` (the workspace layout), and passes `DROP_URL` /
+`DROP_TOKEN` straight through.
 
 ### Claude Code
 
@@ -175,8 +191,9 @@ actually go wrong (absolute asset paths, and pointing at source instead of build
 output). It only needs the CLI — no MCP server.
 
 ```bash
-cp -r skills/drop ~/.claude/skills/drop        # personal
-cp -r skills/drop <project>/.claude/skills/drop  # per project
+mkdir -p ~/.claude/skills/drop
+curl -fsSL https://drop.internal/install/SKILL.md -o ~/.claude/skills/drop/SKILL.md   # personal
+cp -r skills/drop <project>/.claude/skills/drop                                       # per project, from a checkout
 ```
 
 Other agents: point them at `skills/drop/SKILL.md`, or paste it into their rules

@@ -23,6 +23,10 @@ export async function Header() {
         <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/cli" />}>
           CLI
         </Button>
+        <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/how-it-works" />}>
+          <span className="sm:hidden">Help</span>
+          <span className="hidden sm:inline">How it works</span>
+        </Button>
         {user ? (
           <UserMenu
             name={user.display_name}

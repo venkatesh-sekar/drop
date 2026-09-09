@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import type { Expiry } from "@drop/core/expiry"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   AlertDialog,
@@ -90,10 +91,17 @@ export function DropsList({ rows }: { rows: DropRow[] }) {
             className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border py-4"
           >
             <div className={`min-w-0 flex-1 basis-64 ${row.status === "expired" ? "opacity-60" : ""}`}>
-              <p className="truncate font-medium">{row.path}</p>
+              <p className="flex items-center gap-2">
+                <span className="truncate font-medium">{row.path}</span>
+                {row.status === "expired" ? (
+                  <Badge variant="destructive">Expired</Badge>
+                ) : row.permanent ? (
+                  <Badge variant="outline">Permanent</Badge>
+                ) : null}
+              </p>
               <p className="mt-0.5 flex flex-wrap gap-x-4 text-[13px] text-muted-foreground">
                 <span>{row.updated}</span>
-                <span>{row.expiry}</span>
+                {row.permanent && row.status !== "expired" ? null : <span>{row.expiry}</span>}
                 {row.status === "expired" ? <span>Redeploy to bring it back</span> : null}
               </p>
             </div>

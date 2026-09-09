@@ -33,7 +33,7 @@ function onPath(name: string): string | undefined {
   return undefined;
 }
 
-/** DROP_CLI beats `drop` on PATH beats the sibling workspace build. */
+/** DROP_CLI beats `drop` on PATH beats the drop.js installed next to this file beats the workspace build. */
 export function resolveCliCommand(): { command: string; prefix: string[] } {
   const explicit = process.env.DROP_CLI;
   if (explicit && explicit.trim() !== "") return asCommand(explicit.trim());
@@ -42,8 +42,10 @@ export function resolveCliCommand(): { command: string; prefix: string[] } {
   if (found) return asCommand(found);
 
   const here = dirname(fileURLToPath(import.meta.url));
-  const sibling = resolve(here, "../../cli/dist/drop.js");
-  return asCommand(sibling);
+  // `curl | sh` installs drop.js and drop-mcp.js side by side; a workspace build has them in sibling packages.
+  const installed = resolve(here, "drop.js");
+  if (existsSync(installed)) return asCommand(installed);
+  return asCommand(resolve(here, "../../cli/dist/drop.js"));
 }
 
 function asCommand(target: string): { command: string; prefix: string[] } {

@@ -54,11 +54,15 @@ scripts/smoke.sh
 
 ## Use the CLI
 
+Nobody needs a checkout. The control app serves the CLI, the MCP server and the agent skill, plus a one-line installer that points the CLI at that Drop:
+
 ```bash
-pnpm --filter @drop/cli build && npm i -g ./packages/cli
-drop login --url http://localhost:3100      # opens the browser once, stores a token
+curl -fsSL http://localhost:3100/install | sh   # needs Node 20+; installs drop and drop-mcp into ~/.local/bin
+drop login                                       # opens the browser once, stores a token
 drop deploy examples/hello --path hello
 ```
+
+Re-run the install line to update. From a checkout, `pnpm --filter @drop/cli build && npm i -g ./packages/cli` still works. The web app explains the rest at `/how-it-works` and `/cli`.
 
 `drop deploy report.html` publishes one file on its own. Options: `--path`, `--expires <days>`, `--permanent`, `--spa`, `--json`, `--yes`. See `docs/agents.md` for the MCP server, the skill, and CI usage with `DROP_TOKEN`.
 

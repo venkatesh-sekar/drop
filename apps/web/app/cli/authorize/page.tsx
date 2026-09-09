@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { getCliAuthRequest } from "@drop/core"
+import { config, getCliAuthRequest } from "@drop/core"
 
 import { getSessionUser } from "@/lib/auth"
 import { ApproveCli } from "@/components/approve-cli"
@@ -50,6 +50,7 @@ export default async function AuthorizePage({
       code={request.code}
       hostname={request.hostname ?? "an unnamed machine"}
       email={user.email}
+      ttlDays={config.cliTokenTtlDays}
     />
   )
 }

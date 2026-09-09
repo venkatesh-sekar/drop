@@ -2,6 +2,7 @@ export const RESERVED_PATHS: readonly string[] = [
   "api",
   "auth",
   "cli",
+  "install",
   "drops",
   "admin",
   "login",

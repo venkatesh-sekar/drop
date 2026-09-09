@@ -91,6 +91,15 @@ code="$(api "$SITES_URL/health")"
 expect_status "$code" 200 "GET gateway /health"
 ok "gateway healthy"
 
+step "GET $CONTROL_URL/install serves the installer and the CLI bundle"
+code="$(api "$CONTROL_URL/install")"
+expect_status "$code" 200 "GET /install"
+head -c 200 "$WORK_DIR/body" | grep -q '^#!/bin/sh' || fail "GET /install: not a shell script"
+grep -q "DROP_URL=\"$CONTROL_URL\"" "$WORK_DIR/body" || fail "GET /install: does not point at $CONTROL_URL"
+code="$(api "$CONTROL_URL/install/drop.js")"
+expect_status "$code" 200 "GET /install/drop.js (run: pnpm --filter @drop/cli build)"
+ok "installer and drop.js are served"
+
 step "mint a dev token"
 code="$(api -X POST "$CONTROL_URL/api/dev/token" \
   -H 'Content-Type: application/json' \

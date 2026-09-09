@@ -8,6 +8,8 @@ export default defineConfig({
   clean: true,
   sourcemap: false,
   splitting: false,
+  // One self-contained file, so the control app can serve it and `curl | sh` can install it.
+  noExternal: [/.*/],
   banner: { js: "#!/usr/bin/env node" },
   onSuccess: "chmod +x dist/drop-mcp.js",
 });

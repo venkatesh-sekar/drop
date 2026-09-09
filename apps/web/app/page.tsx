@@ -18,6 +18,7 @@ export default async function PublishPage({
       sitesHost={new URL(config.sitesUrl).host}
       signedIn={Boolean(user)}
       initialPath={initialPath}
+      defaultExpiryDays={config.defaultExpiryDays}
     />
   )
 }
