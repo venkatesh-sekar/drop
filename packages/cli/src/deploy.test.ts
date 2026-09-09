@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
+import { strToU8, zipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { main } from "./main.ts";
 
@@ -167,10 +168,70 @@ describe("drop deploy", () => {
     await startServer(() => ({ status: 200, body: {} }));
     const empty = mkdtempSync(join(tmpdir(), "drop-empty-"));
     writeFileSync(join(empty, "main.tsx"), "");
+    writeFileSync(join(empty, "style.css"), "");
     const { code, stdout } = await run(["deploy", empty, "--path", "x", "--json", "--url", baseUrl]);
     rmSync(empty, { recursive: true, force: true });
     expect(code).toBe(1);
     expect(JSON.parse(stdout.trim()).error).toBe("missing_index");
+    expect(captured.url).toBeUndefined();
+  });
+
+  it("refuses a folder whose only html file is not index.html", async () => {
+    await startServer(() => ({ status: 200, body: {} }));
+    const folder = mkdtempSync(join(tmpdir(), "drop-chart-"));
+    writeFileSync(join(folder, "chart.html"), "<h1>c</h1>");
+    writeFileSync(join(folder, "chart.js"), "");
+    const { code, stdout } = await run(["deploy", folder, "--path", "x", "--json", "--url", baseUrl]);
+    rmSync(folder, { recursive: true, force: true });
+    expect(code).toBe(1);
+    expect(JSON.parse(stdout.trim()).error).toBe("missing_index");
+    expect(captured.url).toBeUndefined();
+  });
+
+  it("publishes a single file and names the path after it", async () => {
+    await startServer(() => ({
+      status: 200,
+      body: { url: `${baseUrl}/q3-report/`, path: "q3-report", site: { expires_at: null }, warnings: [] },
+    }));
+    const folder = mkdtempSync(join(tmpdir(), "drop-file-"));
+    const file = join(folder, "Q3 Report.html");
+    writeFileSync(file, "<h1>q3</h1>");
+    const { code, stdout } = await run(["deploy", file, "--json", "--yes", "--url", baseUrl]);
+    rmSync(folder, { recursive: true, force: true });
+    expect(code).toBe(0);
+    expect(captured.url).toBe("/api/sites/q3-report/deploy");
+    expect(captured.archiveBytes).toBeGreaterThan(0);
+    expect(JSON.parse(stdout.trim()).path).toBe("q3-report");
+  });
+
+  it("sends a .zip as the archive itself", async () => {
+    await startServer(() => ({
+      status: 200,
+      body: { url: `${baseUrl}/launch/`, path: "launch", site: { expires_at: null }, warnings: [] },
+    }));
+    const folder = mkdtempSync(join(tmpdir(), "drop-zip-"));
+    const file = join(folder, "launch.zip");
+    const bytes = zipSync({ "index.html": strToU8("<h1>hi</h1>") });
+    writeFileSync(file, bytes);
+    const { code } = await run(["deploy", file, "--json", "--yes", "--url", baseUrl]);
+    rmSync(folder, { recursive: true, force: true });
+    expect(code).toBe(0);
+    expect(captured.url).toBe("/api/sites/launch/deploy");
+    expect(captured.archiveBytes).toBe(bytes.byteLength);
+  });
+
+  it("refuses a single non-html file", async () => {
+    await startServer(() => ({ status: 200, body: {} }));
+    const folder = mkdtempSync(join(tmpdir(), "drop-pdf-"));
+    const file = join(folder, "notes.pdf");
+    writeFileSync(file, "%PDF-1.4");
+    const { code, stdout } = await run(["deploy", file, "--json", "--yes", "--url", baseUrl]);
+    rmSync(folder, { recursive: true, force: true });
+    expect(code).toBe(1);
+    const body = JSON.parse(stdout.trim());
+    expect(body.error).toBe("missing_index");
+    expect(body.message).toContain("html");
+    expect(captured.url).toBeUndefined();
   });
 
   it("exits with unauthenticated JSON when non-interactive and tokenless", async () => {

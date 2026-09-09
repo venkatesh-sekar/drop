@@ -76,9 +76,10 @@ drop open route-optimizer
 drop delete route-optimizer --yes
 ```
 
-The folder must contain `index.html` at its root, and assets must be referenced
-relatively — sites are served under `/<path>/`. See the skill (below) for the
-per-framework base-path settings.
+The folder needs `index.html` at its root. A single html file
+(`drop deploy report.html`) or a `.zip` can be published on its own. Assets must
+be referenced relatively — sites are served under `/<path>/`. See the skill
+(below) for the per-framework base-path settings.
 
 ## 4. Agent usage
 

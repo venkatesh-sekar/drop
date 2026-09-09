@@ -1,7 +1,7 @@
 export const HELP = `drop - Drop a folder. Get a URL.
 
 Usage
-  drop deploy <folder> [options]   Publish a folder of static files
+  drop deploy <folder|file> [opts] Publish a folder of static files, or one html file
   drop list [--json]               List your drops
   drop delete <path> [--yes]       Delete a drop and free its path
   drop open <path>                 Open a drop in your browser
@@ -10,7 +10,7 @@ Usage
   drop whoami [--json]             Show who you are signed in as
 
 Deploy options
-  --path <name>   Path to publish under (default: suggested from the folder name)
+  --path <name>   Path to publish under (default: suggested from the folder or file name)
   --permanent     Never expire (default: expires in 30 days)
   --spa           Serve index.html for unknown routes
   --yes, -y       Skip prompts (use the suggested path)
@@ -25,10 +25,13 @@ Environment
   DROP_URL     Control URL (overridden by --url)
   DROP_TOKEN   API token, for CI (skips the stored credential)
 
-The folder must contain index.html at its root, and assets should be
-referenced relatively - sites are served under /<path>/.
+A folder needs index.html at its root. A single html file can be published
+on its own (it becomes index.html), and a .zip is unpacked. Reference
+assets relatively - sites are served under /<path>/.
 
 Examples
   drop deploy ./dist --path route-optimizer
   drop deploy ./out --permanent --json
+  drop deploy report.html
+  drop deploy site.zip --path launch
 `;

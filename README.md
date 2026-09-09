@@ -2,7 +2,7 @@
 
 **Drop a folder. Get a URL.**
 
-Drop is a small internal platform for publishing static websites. A person, a script or a coding agent hands it a folder with an `index.html`, gives it a name, and gets back a URL like `https://sites.internal/route-optimizer/`.
+Drop is a small internal platform for publishing static websites. A person, a script or a coding agent hands it a folder (or a single HTML file), gives it a name, and gets back a URL like `https://sites.internal/route-optimizer/`.
 
 ```bash
 drop deploy ./dist --path route-optimizer
@@ -60,7 +60,7 @@ drop login --url http://localhost:3100      # opens the browser once, stores a t
 drop deploy examples/hello --path hello
 ```
 
-Options: `--path`, `--permanent`, `--spa`, `--json`, `--yes`. See `docs/agents.md` for the MCP server, the skill, and CI usage with `DROP_TOKEN`.
+`drop deploy report.html` publishes one file on its own. Options: `--path`, `--permanent`, `--spa`, `--json`, `--yes`. See `docs/agents.md` for the MCP server, the skill, and CI usage with `DROP_TOKEN`.
 
 ## How it works
 

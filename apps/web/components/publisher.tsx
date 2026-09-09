@@ -2,7 +2,14 @@
 
 import * as React from "react"
 import { zip } from "fflate"
-import { isReservedPath, isValidPath, normalizePath } from "@drop/core/paths"
+import { homePage, wrapperPrefix } from "@drop/core/layout"
+import {
+  isBuildOutputName,
+  isReservedPath,
+  isValidPath,
+  normalizePath,
+  suggestPathFromFile,
+} from "@drop/core/paths"
 import { Button } from "@workspace/ui/components/button"
 import { Switch } from "@workspace/ui/components/switch"
 
@@ -17,8 +24,17 @@ interface PickedFile {
 }
 
 type Selection =
-  | { kind: "folder"; name: string; files: PickedFile[]; totalBytes: number; hasIndex: boolean }
-  | { kind: "zip"; name: string; file: File; totalBytes: number }
+  | {
+      kind: "files"
+      /** What the user picked: a folder name, a file name, or "3 items". */
+      name: string
+      files: PickedFile[]
+      totalBytes: number
+      /** What visitors land on: "index.html", the lone html file, or null when nothing qualifies. */
+      home: string | null
+      suggestedPath: string
+    }
+  | { kind: "zip"; name: string; file: File; totalBytes: number; suggestedPath: string }
 
 interface DeployedSite {
   url: string
@@ -27,23 +43,23 @@ interface DeployedSite {
   status: "active" | "expired"
 }
 
+type Availability = "free" | "yours" | "taken"
+
+interface AvailabilityCheck {
+  path: string
+  availability: Availability
+  site: DeployedSite | null
+}
+
 const IGNORED = (path: string): boolean => {
   const segments = path.split("/")
-  if (segments.some((s) => s === "__MACOSX" || s === ".git")) return true
+  if (segments.some((s) => s === "__MACOSX" || s === ".git" || s === "node_modules")) return true
   const base = segments[segments.length - 1] ?? ""
   return base === ".DS_Store" || base === "Thumbs.db"
 }
 
-/** Mirror of core's single-wrapper-folder rule, for the client-side index check only. */
-function stripSingleRoot(paths: string[]): string[] {
-  if (paths.length === 0) return paths
-  const tops = new Set(paths.map((p) => p.split("/")[0] ?? ""))
-  if (tops.size !== 1) return paths
-  const top = [...tops][0]!
-  if (!paths.every((p) => p.includes("/"))) return paths
-  if (paths.includes("index.html")) return paths
-  return paths.map((p) => p.slice(top.length + 1))
-}
+const isZipName = (name: string): boolean => /\.zip$/i.test(name)
+const isHtmlName = (name: string): boolean => /\.html?$/i.test(name)
 
 function pathMessage(path: string): string | null {
   if (path === "") return "Give it a name."
@@ -75,25 +91,92 @@ async function readEntry(entry: FileSystemEntry, prefix: string): Promise<Picked
   return [{ path, file }]
 }
 
-function selectionFromFiles(files: PickedFile[], fallbackName: string): Selection | null {
+function zipSelection(file: File): Selection {
+  return {
+    kind: "zip",
+    name: file.name,
+    file,
+    totalBytes: file.size,
+    suggestedPath: suggestPathFromFile(file.name),
+  }
+}
+
+/** A folder, a lone file, or a handful of files, as one selection. */
+function filesSelection(files: PickedFile[], name: string, suggestedPath: string): Selection | null {
   const kept = files.filter((f) => !IGNORED(f.path))
   if (kept.length === 0) return null
-  const totalBytes = kept.reduce((sum, f) => sum + f.file.size, 0)
-  const effective = stripSingleRoot(kept.map((f) => f.path))
-  const name = kept[0]!.path.includes("/") ? kept[0]!.path.split("/")[0]! : fallbackName
+  const paths = kept.map((f) => f.path)
+  const prefix = wrapperPrefix(paths)
+  const effective = prefix ? paths.map((p) => p.slice(prefix.length)) : paths
   return {
-    kind: "folder",
+    kind: "files",
     name,
     files: kept,
-    totalBytes,
-    hasIndex: effective.includes("index.html"),
+    totalBytes: kept.reduce((sum, f) => sum + f.file.size, 0),
+    home: homePage(effective),
+    suggestedPath,
   }
+}
+
+function folderSuggestion(folderName: string): string {
+  // "dist" says nothing about the site; leave the name to the user.
+  return isBuildOutputName(folderName) ? "" : normalizePath(folderName)
+}
+
+/** Turn whatever landed in a drop into a selection. */
+async function selectionFromDataTransfer(data: DataTransfer): Promise<Selection | null> {
+  const entries = Array.from(data.items ?? [])
+    .map((item) => (item.kind === "file" ? item.webkitGetAsEntry() : null))
+    .filter((entry): entry is FileSystemEntry => Boolean(entry))
+
+  if (entries.length === 1) {
+    const [entry] = entries as [FileSystemEntry]
+    const picked = await readEntry(entry, "")
+    if (entry.isFile) {
+      const file = picked[0]?.file
+      if (!file) return null
+      if (isZipName(file.name)) return zipSelection(file)
+      return filesSelection(
+        [{ path: file.name, file }],
+        file.name,
+        suggestPathFromFile(file.name),
+      )
+    }
+    const inside = picked.map((f) => ({ ...f, path: f.path.slice(entry.name.length + 1) }))
+    return filesSelection(inside, entry.name, folderSuggestion(entry.name))
+  }
+
+  if (entries.length > 1) {
+    const collected: PickedFile[] = []
+    for (const entry of entries) collected.push(...(await readEntry(entry, "")))
+    return filesSelection(collected, `${entries.length} items`, "")
+  }
+
+  // No entries API: plain files only.
+  const files = Array.from(data.files ?? [])
+  if (files.length === 1) {
+    const [file] = files as [File]
+    if (isZipName(file.name)) return zipSelection(file)
+    return filesSelection([{ path: file.name, file }], file.name, suggestPathFromFile(file.name))
+  }
+  if (files.length > 1) {
+    return filesSelection(
+      files.map((file) => ({ path: file.name, file })),
+      `${files.length} items`,
+      "",
+    )
+  }
+  return null
 }
 
 function zipAsync(entries: Record<string, Uint8Array>): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
     zip(entries, { level: 6 }, (err, data) => (err ? reject(err) : resolve(data)))
   })
+}
+
+function hasFiles(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes("Files")
 }
 
 export function Publisher({
@@ -107,6 +190,8 @@ export function Publisher({
 }) {
   const [selection, setSelection] = React.useState<Selection | null>(null)
   const [path, setPath] = React.useState(initialPath)
+  // Once the user has typed a name, a new drop must not overwrite it.
+  const [pathEdited, setPathEdited] = React.useState(Boolean(initialPath))
   const [expiry, setExpiry] = React.useState<Expiry | null>(initialPath ? null : "30d")
   const [spa, setSpa] = React.useState(false)
   const [showMore, setShowMore] = React.useState(false)
@@ -116,22 +201,30 @@ export function Publisher({
   const [failure, setFailure] = React.useState<string | null>(null)
   const [warnings, setWarnings] = React.useState<string[]>([])
   const [result, setResult] = React.useState<DeployedSite | null>(null)
+  const [availability, setAvailability] = React.useState<AvailabilityCheck | null>(null)
 
-  const folderInput = React.useRef<HTMLInputElement>(null)
-  const zipInput = React.useRef<HTMLInputElement>(null)
+  const folderInput = React.useRef<HTMLInputElement | null>(null)
+  const fileInput = React.useRef<HTMLInputElement>(null)
+  const pathInput = React.useRef<HTMLInputElement>(null)
 
-  // webkitdirectory has no typed React prop; set it on the DOM node instead.
-  React.useEffect(() => {
-    const node = folderInput.current
+  // webkitdirectory has no typed React prop; set it on the DOM node each time it mounts
+  // (the input is recreated after every publish).
+  const attachFolderInput = React.useCallback((node: HTMLInputElement | null) => {
+    folderInput.current = node
     if (!node) return
     node.setAttribute("webkitdirectory", "")
     node.setAttribute("directory", "")
   }, [])
 
   const pathError = pathMessage(path)
-  const canPublish = Boolean(selection) && !pathError && !busy
+  const taken = availability?.path === path && availability.availability === "taken"
+  const replacing = availability?.path === path && availability.availability === "yours"
+  const hasHomePage = selection?.kind === "zip" || Boolean(selection?.home)
+  const canPublish = Boolean(selection) && hasHomePage && !pathError && !taken && !busy
 
-  function choose(next: Selection | null, suggestedName?: string) {
+  /** Take a new selection. `fresh` starts over, as after a finished publish. */
+  function choose(next: Selection | null, fresh = false) {
+    if (fresh) reset()
     setFailure(null)
     setWarnings([])
     if (!next) {
@@ -139,62 +232,112 @@ export function Publisher({
       return
     }
     setSelection(next)
-    if (!path) {
-      const source = suggestedName ?? next.name
-      setPath(normalizePath(source.replace(/\.zip$/i, "")))
-    }
+    const suggest = fresh || !pathEdited || path === ""
+    if (suggest) setPath(next.suggestedPath)
+    if (suggest && !next.suggestedPath) pathInput.current?.focus()
   }
 
-  async function onDrop(event: React.DragEvent) {
-    event.preventDefault()
-    setDragging(false)
-    const items = Array.from(event.dataTransfer.items ?? [])
-    const entries = items
-      .map((item) => (item.kind === "file" ? item.webkitGetAsEntry() : null))
-      .filter((entry): entry is FileSystemEntry => Boolean(entry))
+  // Drops land anywhere on the page. Without this the browser would navigate to the file.
+  const busyRef = React.useRef(busy)
+  const chooseRef = React.useRef(choose)
+  const resultRef = React.useRef(result)
+  React.useEffect(() => {
+    busyRef.current = busy
+    chooseRef.current = choose
+    resultRef.current = result
+  })
+  React.useEffect(() => {
+    let depth = 0
+    const enter = (event: DragEvent) => {
+      if (!hasFiles(event)) return
+      event.preventDefault()
+      depth += 1
+      if (!busyRef.current) setDragging(true)
+    }
+    const over = (event: DragEvent) => {
+      if (!hasFiles(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = busyRef.current ? "none" : "copy"
+    }
+    const leave = (event: DragEvent) => {
+      if (!hasFiles(event)) return
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) setDragging(false)
+    }
+    const drop = (event: DragEvent) => {
+      if (!hasFiles(event)) return
+      event.preventDefault()
+      depth = 0
+      setDragging(false)
+      if (busyRef.current || !event.dataTransfer) return
+      void selectionFromDataTransfer(event.dataTransfer).then((next) =>
+        chooseRef.current(next, Boolean(resultRef.current)),
+      )
+    }
+    window.addEventListener("dragenter", enter)
+    window.addEventListener("dragover", over)
+    window.addEventListener("dragleave", leave)
+    window.addEventListener("drop", drop)
+    return () => {
+      window.removeEventListener("dragenter", enter)
+      window.removeEventListener("dragover", over)
+      window.removeEventListener("dragleave", leave)
+      window.removeEventListener("drop", drop)
+    }
+  }, [])
 
-    if (entries.length === 1 && entries[0]!.isFile && entries[0]!.name.toLowerCase().endsWith(".zip")) {
-      const [picked] = await readEntry(entries[0]!, "")
-      if (picked) {
-        choose({
-          kind: "zip",
-          name: picked.file.name,
-          file: picked.file,
-          totalBytes: picked.file.size,
+  // Closing the tab mid-upload loses the Drop; make the browser ask first.
+  React.useEffect(() => {
+    if (!busy) return
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+    }
+    window.addEventListener("beforeunload", guard)
+    return () => window.removeEventListener("beforeunload", guard)
+  }, [busy])
+
+  // Ask whether the path is free before the upload, not after.
+  React.useEffect(() => {
+    if (!signedIn || pathError) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/sites/${encodeURIComponent(path)}/availability`, {
+          signal: controller.signal,
+          headers: { accept: "application/json" },
         })
+        if (!response.ok) return
+        const body = (await response.json()) as AvailabilityCheck
+        setAvailability({ path, availability: body.availability, site: body.site })
+      } catch {
+        /* offline or aborted: the server still checks on publish */
       }
-      return
+    }, 300)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
     }
-
-    if (entries.length > 0) {
-      const collected: PickedFile[] = []
-      for (const entry of entries) collected.push(...(await readEntry(entry, "")))
-      choose(selectionFromFiles(collected, entries[0]!.name), entries[0]!.name)
-      return
-    }
-
-    const files = Array.from(event.dataTransfer.files ?? [])
-    const zipFile = files.find((f) => f.name.toLowerCase().endsWith(".zip"))
-    if (zipFile) {
-      choose({ kind: "zip", name: zipFile.name, file: zipFile, totalBytes: zipFile.size })
-      return
-    }
-    setFailure("Drop a folder or a .zip file.")
-  }
+  }, [path, pathError, signedIn])
 
   function onFolderInput(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []).map((file) => ({
-      path: file.webkitRelativePath || file.name,
+    const all = Array.from(event.target.files ?? [])
+    event.target.value = ""
+    if (all.length === 0) return
+    const first = all[0]!.webkitRelativePath
+    const folderName = first.includes("/") ? first.slice(0, first.indexOf("/")) : ""
+    const files = all.map((file) => ({
+      path: folderName ? file.webkitRelativePath.slice(folderName.length + 1) : file.name,
       file,
     }))
-    choose(selectionFromFiles(files, "site"))
-    event.target.value = ""
+    choose(filesSelection(files, folderName || "Folder", folderSuggestion(folderName)))
   }
 
-  function onZipInput(event: React.ChangeEvent<HTMLInputElement>) {
+  function onFileInput(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
-    if (file) choose({ kind: "zip", name: file.name, file, totalBytes: file.size })
     event.target.value = ""
+    if (!file) return
+    if (isZipName(file.name)) choose(zipSelection(file))
+    else choose(filesSelection([{ path: file.name, file }], file.name, suggestPathFromFile(file.name)))
   }
 
   async function publish() {
@@ -202,12 +345,7 @@ export function Publisher({
       window.location.href = `/auth/login?next=${encodeURIComponent("/")}`
       return
     }
-    if (!selection || pathError) return
-
-    if (selection.kind === "folder" && !selection.hasIndex) {
-      setFailure("No index.html at the top of this folder. Choose your build output (dist, build, out).")
-      return
-    }
+    if (!selection || !canPublish) return
 
     setBusy(true)
     setFailure(null)
@@ -277,11 +415,13 @@ export function Publisher({
     setSelection(null)
     setResult(null)
     setPath("")
+    setPathEdited(false)
     setExpiry("30d")
     setSpa(false)
     setShowMore(false)
     setFailure(null)
     setWarnings([])
+    setAvailability(null)
   }
 
   if (result) {
@@ -338,6 +478,10 @@ export function Publisher({
           </button>
         </div>
 
+        {dragging ? (
+          <p className="mt-6 text-sm text-primary">Drop it to publish another.</p>
+        ) : null}
+
         {failure ? <p className="mt-6 text-sm text-destructive">{failure}</p> : null}
       </section>
     )
@@ -345,13 +489,20 @@ export function Publisher({
 
   return (
     <section className="pt-8 sm:pt-12">
-      <input ref={folderInput} type="file" multiple hidden onChange={onFolderInput} />
-      <input ref={zipInput} type="file" accept=".zip,application/zip" hidden onChange={onZipInput} />
+      <input ref={attachFolderInput} type="file" multiple hidden onChange={onFolderInput} />
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".html,.htm,.zip,text/html,application/zip"
+        hidden
+        onChange={onFileInput}
+      />
 
       {selection ? (
         <SummaryRow
           selection={selection}
           progress={progress}
+          dragging={dragging}
           onChange={() => {
             setSelection(null)
             setFailure(null)
@@ -360,13 +511,13 @@ export function Publisher({
       ) : (
         <button
           type="button"
-          onClick={() => folderInput.current?.click()}
-          onDragOver={(event) => {
-            event.preventDefault()
-            setDragging(true)
+          onClick={() => {
+            if (!signedIn) {
+              window.location.href = `/auth/login?next=${encodeURIComponent("/")}`
+              return
+            }
+            folderInput.current?.click()
           }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(event) => void onDrop(event)}
           className={[
             "flex h-[45vh] min-h-64 w-full flex-col justify-end rounded-3xl border border-dashed p-7 text-left transition-colors outline-none sm:h-[55vh] sm:p-9",
             dragging ? "border-primary bg-primary/5" : "border-foreground/20 hover:bg-muted/40",
@@ -374,24 +525,25 @@ export function Publisher({
           ].join(" ")}
         >
           <span className="block text-[2.25rem] leading-[1.1] font-medium tracking-tight text-balance sm:text-[3rem]">
-            {signedIn ? "Drop a folder. Get a URL." : "Sign in to publish."}
+            {dragging ? "Drop it." : signedIn ? "Drop a folder. Get a URL." : "Sign in to publish."}
           </span>
           <span className="mt-3 block text-[15px] text-muted-foreground">
-            Drag a folder or a .zip here, or choose a folder.
+            Drag a folder, an HTML file or a .zip anywhere on this page, or click to choose a folder.
           </span>
         </button>
       )}
 
       {!selection ? (
         <p className="mt-3 text-[13px] text-muted-foreground">
-          Got an archive already?{" "}
+          Just one page?{" "}
           <button
             type="button"
-            onClick={() => zipInput.current?.click()}
+            onClick={() => fileInput.current?.click()}
             className="rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
           >
-            choose a .zip
+            choose an HTML file or a .zip
           </button>
+          . A single HTML file needs no index.html.
         </p>
       ) : null}
 
@@ -402,18 +554,38 @@ export function Publisher({
         <div className="flex flex-wrap items-baseline gap-x-1 text-xl sm:text-2xl">
           <span className="text-muted-foreground">{sitesHost}/</span>
           <input
+            ref={pathInput}
             id="drop-path"
             value={path}
             spellCheck={false}
             autoComplete="off"
             placeholder="route-optimizer"
-            onChange={(event) => setPath(event.target.value)}
+            onChange={(event) => {
+              setPath(event.target.value)
+              setPathEdited(true)
+            }}
             onBlur={(event) => setPath(normalizePath(event.target.value))}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return
+              event.preventDefault()
+              setPath(normalizePath(event.currentTarget.value))
+              if (canPublish) void publish()
+            }}
             className="min-w-0 flex-1 basis-48 rounded-sm bg-transparent py-1 outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/30"
           />
         </div>
         {path && pathError ? (
           <p className="mt-2 text-sm text-destructive">{pathError}</p>
+        ) : taken ? (
+          <p className="mt-2 text-sm text-destructive">
+            {path} is taken by someone else. Try another name.
+          </p>
+        ) : replacing ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {availability?.site?.status === "expired"
+              ? "Yours, currently expired. Publishing brings it back at the same URL."
+              : "Yours already. Publishing replaces what is there, at the same URL."}
+          </p>
         ) : null}
       </div>
 
@@ -478,13 +650,31 @@ export function Publisher({
   )
 }
 
+function homePageNote(selection: Selection): { text: string; problem: boolean } {
+  if (selection.kind === "zip") return { text: "Archive", problem: false }
+  if (selection.home === "index.html") return { text: "index.html found", problem: false }
+  if (selection.home) return { text: "Published as index.html", problem: false }
+  if (selection.files.length === 1 && !isHtmlName(selection.files[0]!.path)) {
+    return {
+      text: "Only an HTML file can be published on its own. Put it in a folder with an index.html.",
+      problem: true,
+    }
+  }
+  return {
+    text: "No index.html at the top. Choose your build output (dist, build, out).",
+    problem: true,
+  }
+}
+
 function SummaryRow({
   selection,
   progress,
+  dragging,
   onChange,
 }: {
   selection: Selection
   progress: number | null
+  dragging: boolean
   onChange: () => void
 }) {
   const detail =
@@ -492,27 +682,18 @@ function SummaryRow({
       ? formatBytes(selection.totalBytes)
       : `${selection.files.length} file${selection.files.length === 1 ? "" : "s"}  ${formatBytes(selection.totalBytes)}`
 
-  const note =
-    selection.kind === "zip"
-      ? "Archive"
-      : selection.hasIndex
-        ? "index.html found"
-        : "No index.html at the top"
+  const note = homePageNote(selection)
 
   return (
-    <div className="rounded-3xl border border-border p-5 sm:p-6">
+    <div
+      className={[
+        "rounded-3xl border p-5 transition-colors sm:p-6",
+        dragging ? "border-dashed border-primary bg-primary/5" : "border-border",
+      ].join(" ")}
+    >
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <span className="text-lg font-medium">{selection.name}</span>
         <span className="text-sm text-muted-foreground">{detail}</span>
-        <span
-          className={
-            selection.kind === "folder" && !selection.hasIndex
-              ? "text-sm text-destructive"
-              : "text-sm text-muted-foreground"
-          }
-        >
-          {note}
-        </span>
         <button
           type="button"
           onClick={onChange}
@@ -521,6 +702,9 @@ function SummaryRow({
           Change
         </button>
       </div>
+      <p className={`mt-2 text-sm ${note.problem ? "text-destructive" : "text-muted-foreground"}`}>
+        {dragging ? "Drop it to replace this." : note.text}
+      </p>
       {progress !== null ? (
         <div className="mt-5 h-1 w-full overflow-hidden rounded-full bg-muted">
           <div
@@ -575,7 +759,9 @@ function publishError(body: unknown, path: string): string {
     case "reserved_path":
       return `"${path}" is reserved. Pick another name.`
     case "missing_index":
-      return "No index.html at the top of this folder. Choose your build output (dist, build, out)."
+      return "No index.html at the top. Choose your build output (dist, build, out), or a single HTML file."
+    case "invalid_archive":
+      return "Could not read that archive. Is it a valid .zip?"
     case "site_too_large":
     case "archive_too_large":
       return "That's over the 200 MB limit."

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isValidPath, normalizePath, suggestPathFromFolder } from "./paths.ts";
+import { isValidPath, normalizePath, suggestPathFromFile, suggestPathFromFolder } from "./paths.ts";
 
 describe("normalizePath", () => {
   it.each([
@@ -46,5 +46,12 @@ describe("suggestPathFromFolder", () => {
 
   it("handles trailing separators", () => {
     expect(suggestPathFromFolder("/work/my-app/dist/")).toBe("my-app");
+  });
+});
+
+describe("suggestPathFromFile", () => {
+  it("uses the file name without its extension", () => {
+    expect(suggestPathFromFile("/tmp/out/Q3 Report.html")).toBe("q3-report");
+    expect(suggestPathFromFile("notes.pdf")).toBe("notes");
   });
 });

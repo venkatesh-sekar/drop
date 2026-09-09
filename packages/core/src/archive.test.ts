@@ -101,6 +101,34 @@ describe("validateArchive", () => {
     expectCode(() => validateArchive(zip({ "app.js": "x" }), LIMITS), "missing_index");
   });
 
+  it("publishes a single html file as index.html", () => {
+    const result = validateArchive(zip({ "report.html": "<h1>q3</h1>" }), LIMITS);
+    expect(result.files.map((f) => f.path)).toEqual(["index.html"]);
+    expect(new TextDecoder().decode(result.files[0]!.bytes)).toBe("<h1>q3</h1>");
+  });
+
+  it("publishes a single html file inside a wrapping folder", () => {
+    const result = validateArchive(zip({ "out/report.html": "<h1>q3</h1>" }), LIMITS);
+    expect(result.files.map((f) => f.path)).toEqual(["index.html"]);
+  });
+
+  it("does not promote an html file that has company", () => {
+    expectCode(
+      () => validateArchive(zip({ "chart.html": "x", "assets/chart.js": "y" }), LIMITS),
+      "missing_index",
+    );
+    expectCode(() => validateArchive(zip({ "a.html": "x", "b.html": "y" }), LIMITS), "missing_index");
+  });
+
+  it("refuses a single non-html file", () => {
+    expectCode(() => validateArchive(zip({ "report.pdf": "%PDF-1.4" }), LIMITS), "missing_index");
+  });
+
+  it("checks a lone html file for absolute asset paths", () => {
+    const result = validateArchive(zip({ "report.html": '<script src="/app.js"></script>' }), LIMITS);
+    expect(result.warnings).toEqual([ABSOLUTE_PATH_WARNING]);
+  });
+
   it("errors on an empty archive", () => {
     expectCode(() => validateArchive(zip({}), LIMITS), "invalid_archive");
   });

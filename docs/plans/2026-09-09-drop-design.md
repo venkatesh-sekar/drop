@@ -89,7 +89,7 @@ Input: zip bytes. Output: `{ files: {path, bytes}[], warnings: string[] }` or a 
 - Reject entries with `..`, leading `/`, backslashes, empty segments, control chars, or names longer than 255 bytes.
 - Skip `__MACOSX/`, `.DS_Store`, `Thumbs.db`, `.git/` entries and directory entries.
 - If every remaining entry lives under one top-level folder and `index.html` is only inside it, strip that folder.
-- Require `index.html` at root after stripping (`missing_index`).
+- Require `index.html` at root after stripping, with one exception: an upload that is a single `.html`/`.htm` file is published as `index.html`. Anything else is `missing_index`; nothing is guessed (`packages/core/src/layout.ts`, shared with the web publisher).
 - Enforce MAX_FILES, MAX_FILE_BYTES, MAX_SITE_BYTES, MAX_ARCHIVE_BYTES (`too_many_files`, `file_too_large`, `site_too_large`, `archive_too_large`).
 - Warning (not error) when `index.html` references `src="/..."` or `href="/..."` that is not `//`: "Absolute asset paths will break under /<path>/. Use relative paths or set your build's base path."
 
@@ -107,6 +107,7 @@ Auth: browser session cookie (`drop_session`, httpOnly, sameSite=lax, signed JWT
 GET    /api/me                          → { user: { id, display_name, email, is_admin } }        401 if none
 GET    /api/sites                       → { sites: Site[] }   (mine, newest deploy first)
 GET    /api/sites/:path                 → { site: Site }      404 unless mine (or admin)
+GET    /api/sites/:path/availability    → { path, availability: "free"|"yours"|"taken", site: Site|null }   (site only when yours)
 POST   /api/sites/:path/deploy          multipart/form-data: archive (zip), expiry? ("30d"|"never"), spa? ("true"|"false")
                                         → 200 { url, path, site, warnings: string[] }
                                         409 path_taken (another user owns it) · 400 invalid_path | reserved_path |
@@ -149,7 +150,7 @@ Site lookup: `select ... from sites where path=$1 and status='active' and (expir
 ## CLI (`drop`)
 
 ```
-drop deploy <folder> [--path <name>] [--permanent] [--spa] [--json] [--yes]
+drop deploy <folder|file> [--path <name>] [--permanent] [--spa] [--json] [--yes]
 drop login | logout | whoami [--json]
 drop list [--json]
 drop delete <path> [--json] [--yes]
@@ -158,7 +159,8 @@ drop open <path>
 - Control URL: `DROP_URL` env > `~/.config/drop/config.json` > `http://localhost:3100`.
 - Credential: `~/.config/drop/credentials.json` (mode 0600) keyed by control URL. (OS keychain deferred — noted as a follow-up.)
 - Not authenticated → "Authentication required. Opening browser..." → device flow (`/api/cli/auth/start`, open `verify_url`, poll) → store token → continue.
-- No `--path`: suggestion from folder name; on a TTY prompt with that default, non-TTY uses the suggestion.
+- No `--path`: suggestion from the folder name (or the file name without its extension); on a TTY prompt with that default, non-TTY uses the suggestion.
+- A single html file is published on its own; a `.zip` is sent as the archive as-is. The local `missing_index` check mirrors the core rule so a hopeless upload fails before the transfer.
 - `--json` prints exactly one JSON object on stdout (`{ url, path, warnings }` on success; `{ error, message }` + exit 1 on failure). Human output otherwise.
 - Zips the folder in memory with `fflate`, uploads multipart with `fetch`.
 
@@ -172,7 +174,7 @@ Pages: `/` (publish; signed-out shows the same layout with a sign-in call to act
 
 Design direction (from the preset): Inter, neutral surfaces, one crimson accent, pill buttons, generous radius. The publish page *is* the drop zone: one large target that fills the viewport, "Drop a folder. Get a URL." inside it. Below: a path field with a live URL preview (`localhost:3101/` dimmed, path in foreground), an expiry toggle (30 days / Never), a "Single-page app" toggle tucked under "More", and one crimson **Publish** button. Publishing shows progress in place; success replaces the target with the live URL, Open and Copy URL. My Drops is a plain list with hairline dividers, not cards. Light and dark. No decorative motion; only state changes animate.
 
-Folder upload: `<input type="file" webkitdirectory>` and drag-drop of a folder (DataTransferItem.webkitGetAsEntry) or a `.zip`. Files are zipped in the browser with `fflate` and uploaded with XHR for progress.
+Folder upload: `<input type="file" webkitdirectory>`, a plain file input for one html file or a `.zip`, and drag-drop anywhere on the page (window-level listeners, so a missed drop never navigates the browser to the file) of a folder, a file, several files or a `.zip` (DataTransferItem.webkitGetAsEntry). Files are zipped in the browser with `fflate` and uploaded with XHR for progress. The summary row applies the shared layout rule and disables Publish, with the reason, when nothing qualifies. While a name is typed, `/availability` says whether the path is free, already yours (publishing replaces it) or taken (Publish disabled). Enter in the path field publishes; closing the tab mid-upload prompts first.
 
 ## Background work
 

@@ -23,7 +23,13 @@ drop deploy <folder> --path <name> --json
 ```
 
 `<folder>` is the **built output** (`dist/`, `build/`, `out/`, `_site/`), not the
-source. It must contain `index.html` at its root.
+source. It must contain `index.html` at its root. For a one-page result
+(`report.html`, a rendered notebook, a chart) point `drop deploy` at the html
+file itself; it is published as `index.html`:
+
+```bash
+drop deploy ./report.html --path q3-report --json
+```
 
 Success prints exactly one line of JSON on stdout:
 
@@ -92,8 +98,9 @@ is non-empty, tell the user, or rebuild with the right base and deploy again.
 - `path_taken` - someone else owns that path. Pick a different one and retry.
   Never try to take it from them.
 - `reserved_path` / `invalid_path` - rename to lowercase letters, numbers, hyphens.
-- `missing_index` - you pointed at source, not build output. Build first, then
-  point at `dist/`, `build/` or `out/`.
+- `missing_index` - you pointed at source, not build output, or at a folder
+  without `index.html`. Build first and point at `dist/`, `build/` or `out/`,
+  or point at a single html file.
 - `unauthenticated` - **stop and ask the user** to run `drop login` once in their
   terminal. It opens their browser for SSO and stores the credential. Never ask
   them for a token, and never try to log in on their behalf.

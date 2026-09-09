@@ -43,9 +43,11 @@ server.registerTool(
   {
     title: "Publish a static site with Drop",
     description:
-      "Publish a folder of already-built static files and get back a shareable URL. " +
-      "The folder must contain index.html at its root - point this at build output " +
-      "(dist/, build/, out/), not at source. Sites are served under /<path>/, so every asset " +
+      "Publish a folder of already-built static files, or a single html file, and get back a " +
+      "shareable URL. A folder needs index.html at its root - point this at build output " +
+      "(dist/, build/, out/), not at source. For a one-page result (report.html, a chart, a " +
+      "rendered notebook) pass the html file itself. Sites are served under /<path>/, so " +
+      "every asset " +
       "reference in the HTML must be relative ('./assets/app.js', not '/assets/app.js'); for " +
       "Vite set base: './', for Next.js use output: 'export' with basePath/assetPrefix, for Astro " +
       "set base. Returns { url, path, expires_at, warnings } - give the url back to the user. " +
@@ -54,7 +56,10 @@ server.registerTool(
     inputSchema: {
       folder: z
         .string()
-        .describe("Path to the built site folder, absolute or relative to the working directory."),
+        .describe(
+          "Path to the built site folder, or to a single html file, absolute or relative to " +
+            "the working directory.",
+        ),
       path: z
         .string()
         .optional()

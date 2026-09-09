@@ -39,3 +39,9 @@ export function suggestPathFromFolder(folderPath: string): string {
   }
   return normalizePath(name);
 }
+
+/** Suggest a site path from a single file: "Q3 Report.html" → "q3-report". */
+export function suggestPathFromFile(filePath: string): string {
+  const name = basename(resolve(filePath));
+  return normalizePath(name.replace(/\.[^.]+$/, ""));
+}

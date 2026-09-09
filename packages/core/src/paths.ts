@@ -82,6 +82,11 @@ const BUILD_DIR_NAMES = new Set([
   "html",
 ]);
 
+/** True for folder names that describe build output ("dist") rather than the project. */
+export function isBuildOutputName(name: string): boolean {
+  return BUILD_DIR_NAMES.has(String(name ?? "").toLowerCase());
+}
+
 /** Suggest a path from a folder path; build-output folder names fall back to the parent. */
 export function suggestPathFromFolder(folderPath: string): string {
   const parts = String(folderPath ?? "")
@@ -89,8 +94,14 @@ export function suggestPathFromFolder(folderPath: string): string {
     .split("/")
     .filter((p) => p && p !== ".");
   let base = parts[parts.length - 1] ?? "";
-  if (BUILD_DIR_NAMES.has(base.toLowerCase())) {
+  if (isBuildOutputName(base)) {
     base = parts[parts.length - 2] ?? base;
   }
   return normalizePath(base);
+}
+
+/** Suggest a path from a single file name: "Q3 Report.html" → "q3-report". */
+export function suggestPathFromFile(fileName: string): string {
+  const base = String(fileName ?? "").replace(/\\/g, "/").split("/").pop() ?? "";
+  return normalizePath(base.replace(/\.[^.]+$/, ""));
 }

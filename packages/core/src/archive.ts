@@ -1,5 +1,6 @@
 import { unzipSync } from "fflate";
 import { config as defaultConfig } from "./config";
+import { homePage, wrapperPrefix } from "./layout";
 
 export type ArchiveErrorCode =
   | "invalid_archive"
@@ -109,23 +110,19 @@ export function validateArchive(
   }
 
   // Strip a single wrapping top-level folder.
-  const tops = new Set(files.map((f) => f.path.split("/")[0] ?? ""));
-  if (tops.size === 1) {
-    const top = [...tops][0]!;
-    const allNested = files.every((f) => f.path.includes("/"));
-    const indexAtRoot = files.some((f) => f.path === "index.html");
-    if (allNested && !indexAtRoot) {
-      files = files.map((f) => ({ ...f, path: f.path.slice(top.length + 1) }));
-    }
-  }
+  const prefix = wrapperPrefix(files.map((f) => f.path));
+  if (prefix) files = files.map((f) => ({ ...f, path: f.path.slice(prefix.length) }));
 
-  const index = files.find((f) => f.path === "index.html");
-  if (!index) {
+  // A lone html file is published as index.html; anything else needs index.html at the root.
+  const home = homePage(files.map((f) => f.path));
+  if (home === null) {
     throw new ArchiveError(
       "missing_index",
-      "No index.html found at the root of the upload. Drop needs an index.html.",
+      "No index.html at the root of the upload. Drop needs a folder with index.html, or a single html file.",
     );
   }
+  if (home !== "index.html") files = [{ path: "index.html", bytes: files[0]!.bytes }];
+  const index = files.find((f) => f.path === "index.html")!;
 
   if (files.length > lim.maxFiles) {
     throw new ArchiveError(

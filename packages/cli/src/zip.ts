@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { basename, join, relative, sep } from "node:path";
 import { zipSync, type Zippable } from "fflate";
 
 const SKIP_DIRS = new Set([".git", "node_modules"]);
@@ -39,6 +39,24 @@ export function collectFiles(root: string): CollectedFile[] {
   walk(root);
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return files;
+}
+
+/** A single file, published on its own. */
+export function collectFile(file: string): CollectedFile[] {
+  return [{ path: basename(file), bytes: new Uint8Array(readFileSync(file)) }];
+}
+
+const HTML_FILE = /\.html?$/i;
+
+/**
+ * Mirror of @drop/core's layout rule (packages/core/src/layout.ts), so a hopeless
+ * upload fails here instead of after the transfer: the site needs index.html at the
+ * root, or the upload is a single html file.
+ */
+export function hasHomePage(files: CollectedFile[]): boolean {
+  const paths = files.map((f) => f.path);
+  if (paths.includes("index.html")) return true;
+  return paths.length === 1 && !paths[0]!.includes("/") && HTML_FILE.test(paths[0]!);
 }
 
 export function zipFiles(files: CollectedFile[]): Uint8Array {

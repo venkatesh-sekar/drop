@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  isBuildOutputName,
   isReservedPath,
   isValidPath,
   normalizePath,
   RESERVED_PATHS,
+  suggestPathFromFile,
   suggestPathFromFolder,
   validatePath,
 } from "./paths";
@@ -87,5 +89,21 @@ describe("suggestPathFromFolder", () => {
 
   it("keeps the build folder name when there is no parent", () => {
     expect(suggestPathFromFolder("dist")).toBe("dist");
+  });
+});
+
+describe("isBuildOutputName", () => {
+  it("recognises build folders case-insensitively", () => {
+    expect(isBuildOutputName("dist")).toBe(true);
+    expect(isBuildOutputName("Build")).toBe(true);
+    expect(isBuildOutputName("route-optimizer")).toBe(false);
+  });
+});
+
+describe("suggestPathFromFile", () => {
+  it("drops the extension and normalizes", () => {
+    expect(suggestPathFromFile("Q3 Report.html")).toBe("q3-report");
+    expect(suggestPathFromFile("/tmp/out/chart.final.HTML")).toBe("chartfinal");
+    expect(suggestPathFromFile("README")).toBe("readme");
   });
 });
