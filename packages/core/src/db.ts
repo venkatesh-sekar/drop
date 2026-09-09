@@ -61,7 +61,7 @@ export async function migrate(db: Sql = getSql()): Promise<string[]> {
     if (applied.has(file)) continue;
     const sqlText = fs.readFileSync(path.join(dir, file), "utf8");
     await db.begin(async (tx) => {
-      await tx.unsafe(sqlText);
+      await tx.unsafe(sqlText).simple();
       await tx`insert into schema_migrations (name) values (${file})`;
     });
     ran.push(file);

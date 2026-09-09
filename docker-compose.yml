@@ -1,0 +1,124 @@
+# Infra only by default:  docker compose up -d
+# With the apps:          docker compose --profile app up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: drop
+      POSTGRES_PASSWORD: drop
+      POSTGRES_DB: drop
+    ports:
+      - "5440:5432"
+    volumes:
+      - drop-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U drop -d drop"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: drop
+      MINIO_ROOT_PASSWORD: dropdropdrop
+    ports:
+      - "9100:9000"
+      - "9101:9001"
+    volumes:
+      - drop-minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 drop dropdropdrop &&
+        mc mb --ignore-existing local/drop-sites &&
+        mc ls local &&
+        echo 'minio-init: bucket drop-sites ready'
+      "
+    restart: "no"
+
+  drop-control:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: drop-control
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment: &app-env
+      NODE_ENV: production
+      DATABASE_URL: postgres://drop:drop@postgres:5432/drop
+      STORAGE_DRIVER: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: drop-sites
+      S3_ACCESS_KEY: drop
+      S3_SECRET_KEY: dropdropdrop
+      S3_REGION: us-east-1
+      S3_FORCE_PATH_STYLE: "true"
+      CONTROL_URL: http://localhost:3100
+      SITES_URL: http://localhost:3101
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-mock}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@example.com}
+      DEFAULT_EXPIRY_DAYS: "30"
+      EXPIRED_RETENTION_DAYS: "30"
+      CLI_TOKEN_TTL_DAYS: "90"
+      MAX_FILES: "5000"
+      MAX_FILE_BYTES: "26214400"
+      MAX_SITE_BYTES: "209715200"
+      MAX_ARCHIVE_BYTES: "209715200"
+    ports:
+      - "3100:3000"
+
+  drop-gateway:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    image: drop-gateway
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment: *app-env
+    ports:
+      - "3101:3001"
+
+  drop-cleanup:
+    profiles: ["app"]
+    image: drop-control
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment: *app-env
+    command: ["/bin/sh", "-c", "while true; do node_modules/.bin/tsx packages/core/src/scripts/cleanup.ts || true; sleep 3600; done"]
+
+volumes:
+  drop-postgres:
+  drop-minio:

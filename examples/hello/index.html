@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hello from Drop</title>
+    <link rel="icon" href="assets/logo.svg" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="card">
+      <img class="logo" src="assets/logo.svg" alt="" width="56" height="56" />
+      <h1>Hello from Drop</h1>
+      <p class="lede">
+        This folder was a folder. Now it is a website. Nothing here was built, bundled or
+        configured — it was dropped.
+      </p>
+
+      <dl class="facts">
+        <div>
+          <dt>Served from</dt>
+          <dd id="origin">—</dd>
+        </div>
+        <div>
+          <dt>Path</dt>
+          <dd id="path">—</dd>
+        </div>
+        <div>
+          <dt>Loaded</dt>
+          <dd id="loaded">—</dd>
+        </div>
+      </dl>
+
+      <button id="ping" class="button" type="button">Say hello</button>
+      <p id="reply" class="reply" hidden></p>
+
+      <footer>
+        <code>drop deploy ./examples/hello --path hello</code>
+      </footer>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
