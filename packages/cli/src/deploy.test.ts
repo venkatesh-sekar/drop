@@ -140,6 +140,16 @@ describe("drop deploy", () => {
     });
   });
 
+  it("sends --expires as a day expiry", async () => {
+    await startServer(() => ({
+      status: 200,
+      body: { url: `${baseUrl}/x/`, path: "x", site: { expires_at: "2099-01-01T00:00:00.000Z" }, warnings: [] },
+    }));
+    const { code } = await run(["deploy", site, "--path", "x", "--expires", "60", "--json", "--url", baseUrl]);
+    expect(code).toBe(0);
+    expect(captured.fields).toEqual({ expiry: "60d" });
+  });
+
   it("omits expiry and spa fields by default", async () => {
     await startServer(() => ({
       status: 200,

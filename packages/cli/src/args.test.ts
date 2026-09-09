@@ -33,6 +33,21 @@ describe("parseArgs", () => {
     expect(parseArgs([]).command).toBeUndefined();
   });
 
+  it("parses --expires as a whole number of days from 1 to 365", () => {
+    expect(parseArgs(["deploy", "./dist", "--expires", "60"]).expires).toBe(60);
+    expect(parseArgs(["deploy", "./dist", "--expires=365"]).expires).toBe(365);
+    expect(parseArgs(["deploy", "./dist"]).expires).toBeUndefined();
+    for (const bad of ["0", "366", "7.5", "07", "-7", "7d", "soon", ""]) {
+      expect(() => parseArgs(["deploy", "./dist", "--expires", bad])).toThrow(UsageError);
+    }
+    expect(() => parseArgs(["deploy", "./dist", "--expires"])).toThrow(UsageError);
+  });
+
+  it("refuses --expires together with --permanent", () => {
+    expect(() => parseArgs(["deploy", "./dist", "--expires", "7", "--permanent"])).toThrow(UsageError);
+    expect(() => parseArgs(["deploy", "./dist", "--permanent", "--expires=7"])).toThrow(UsageError);
+  });
+
   it("rejects unknown commands and options", () => {
     expect(() => parseArgs(["publish"])).toThrow(UsageError);
     expect(() => parseArgs(["list", "--nope"])).toThrow(UsageError);

@@ -3,6 +3,9 @@ import { UsageError } from "./errors.ts";
 export const COMMANDS = ["deploy", "login", "logout", "whoami", "list", "delete", "open"] as const;
 export type Command = (typeof COMMANDS)[number];
 
+/** Longest a site may live before it expires; matches the server. */
+export const MAX_EXPIRY_DAYS = 365;
+
 export interface ParsedArgs {
   command?: Command;
   positionals: string[];
@@ -11,12 +14,21 @@ export interface ParsedArgs {
   json: boolean;
   yes: boolean;
   permanent: boolean;
+  /** Whole days until expiry, 1 to MAX_EXPIRY_DAYS. Unset: the server default. */
+  expires?: number;
   spa: boolean;
   help: boolean;
   version: boolean;
 }
 
-const VALUE_FLAGS = new Set(["--url", "--path"]);
+const VALUE_FLAGS = new Set(["--url", "--path", "--expires"]);
+
+function parseExpires(value: string): number {
+  if (!/^[1-9]\d{0,2}$/.test(value) || Number(value) > MAX_EXPIRY_DAYS) {
+    throw new UsageError(`--expires must be a whole number of days from 1 to ${MAX_EXPIRY_DAYS}.`);
+  }
+  return Number(value);
+}
 
 function isCommand(value: string): value is Command {
   return (COMMANDS as readonly string[]).includes(value);
@@ -55,6 +67,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         const value = inlineValue ?? argv[++i];
         if (value === undefined) throw new UsageError(`${name} requires a value.`);
         if (name === "--url") result.url = value;
+        else if (name === "--expires") result.expires = parseExpires(value);
         else result.path = value;
         continue;
       }
@@ -98,6 +111,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
 
     result.positionals.push(arg);
+  }
+
+  if (result.permanent && result.expires !== undefined) {
+    throw new UsageError("Use --expires or --permanent, not both.");
   }
 
   return result;

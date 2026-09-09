@@ -3,11 +3,10 @@ import type { Config } from "./config";
 import { config as defaultConfig } from "./config";
 import type { Sql } from "./db";
 import { sql as defaultSql } from "./db";
+import { type Expiry, expiresAtFor } from "./expiry";
 import { contentTypeFor } from "./mime";
 import { validatePath } from "./paths";
 import { putMany, type Storage, type UploadFile } from "./storage/index";
-
-export type Expiry = "30d" | "never";
 
 export type SiteErrorCode =
   | "invalid_path"
@@ -86,13 +85,9 @@ export function toSiteJson(row: SiteRow, sitesUrl: string = defaultConfig.sitesU
   };
 }
 
-/** null = permanent. */
-export function expiresAtFor(
-  expiry: Expiry,
-  config: Config = defaultConfig,
-): Date | null {
-  if (expiry === "never") return null;
-  return new Date(Date.now() + config.defaultExpiryDays * 24 * 60 * 60 * 1000);
+/** What a new site gets when the deploy names no expiry. */
+export function defaultExpiry(config: Config = defaultConfig): Expiry {
+  return `${config.defaultExpiryDays}d`;
 }
 
 export async function findSiteByPath(
@@ -185,7 +180,7 @@ export async function deploySite(input: DeploySiteInput): Promise<DeploySiteResu
   let site: SiteRow;
   if (existing) {
     const expiresAt =
-      input.expiry === undefined ? existing.expires_at : expiresAtFor(input.expiry, config);
+      input.expiry === undefined ? existing.expires_at : expiresAtFor(input.expiry);
     const spa = input.spa === undefined ? existing.spa : input.spa;
     const rows = await db<SiteRow[]>`
       update sites set
@@ -202,7 +197,7 @@ export async function deploySite(input: DeploySiteInput): Promise<DeploySiteResu
     `;
     site = rows[0]!;
   } else {
-    const expiresAt = expiresAtFor(input.expiry ?? "30d", config);
+    const expiresAt = expiresAtFor(input.expiry ?? defaultExpiry(config));
     try {
       const rows = await db<SiteRow[]>`
         insert into sites (
@@ -243,13 +238,12 @@ export async function updateSite(
   path: string,
   userId: string,
   changes: UpdateSiteInput,
-  config: Config = defaultConfig,
   db: Sql = defaultSql,
 ): Promise<SiteRow> {
   const site = await findSiteByPath(path, db);
   if (!site || site.owner_user_id !== userId) throw new SiteError("not_found");
 
-  const expiresAt = changes.expiry === undefined ? site.expires_at : expiresAtFor(changes.expiry, config);
+  const expiresAt = changes.expiry === undefined ? site.expires_at : expiresAtFor(changes.expiry);
   const spa = changes.spa === undefined ? site.spa : changes.spa;
   // Restoring an expiry in the future reactivates an expired site that still has content.
   const status =

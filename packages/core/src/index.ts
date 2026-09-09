@@ -5,6 +5,7 @@ export * from "./mime";
 export * from "./archive";
 export * from "./layout";
 export * from "./storage/index";
+export * from "./expiry";
 export * from "./sites";
 export * from "./users";
 export * from "./cli-auth";

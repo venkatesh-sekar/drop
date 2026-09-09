@@ -110,6 +110,7 @@ export async function deploy(args: ParsedArgs, controlUrl: string): Promise<void
           "site.zip",
         );
         if (args.permanent) form.append("expiry", "never");
+        if (args.expires !== undefined) form.append("expiry", `${args.expires}d`);
         if (args.spa) form.append("spa", "true");
         return form;
       },

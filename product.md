@@ -233,19 +233,20 @@ Sites should default to temporary storage.
 Recommended default:
 
 ```text
-30 days
+7 days
 ```
 
 The exact duration should be configurable.
 
-For MVP, supporting only:
+The UI offers:
 
 ```text
+7 days
 30 days
+60 days
+Custom (a whole number of days, 1 to 365)
 Never
 ```
-
-is sufficient.
 
 Permanent sites may require an explicit option such as:
 
@@ -529,7 +530,7 @@ Path
 [ route-optimizer ]
 
 Expiry
-[ 30 days ]
+[ 7 days v ]   (7 days, 30 days, 60 days, Custom, Never)
 
 [ Publish ]
 ```

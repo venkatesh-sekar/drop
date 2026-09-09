@@ -37,7 +37,7 @@ Success prints exactly one line of JSON on stdout:
 {
   "url": "https://sites.internal/route-optimizer/",
   "path": "route-optimizer",
-  "expires_at": "2026-10-09T12:00:00.000Z",
+  "expires_at": "2026-09-16T12:00:00.000Z",
   "warnings": []
 }
 ```
@@ -86,8 +86,9 @@ is non-empty, tell the user, or rebuild with the right base and deploy again.
 
 ## Options
 
-- `--permanent` - never expires. Without it a site expires in 30 days, which is the
-  right default for one-off reports and prototypes.
+- `--expires <days>` - expire after that many whole days, 1 to 365. Without it a site
+  expires in 7 days, which is the right default for one-off reports and prototypes.
+- `--permanent` - never expires. Not together with `--expires`.
 - `--spa` - serve `index.html` for unknown routes. Needed for client-side routers
   (React Router, Vue Router) so a deep link does not 404.
 - `--path <name>` - the URL path.

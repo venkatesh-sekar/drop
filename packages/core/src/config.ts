@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { MAX_EXPIRY_DAYS } from "./expiry";
 
 /** Walk up from `start` until a directory containing pnpm-workspace.yaml is found. */
 export function findRepoRoot(start: string = process.cwd()): string {
@@ -125,6 +126,10 @@ function buildConfig(): Config {
   const authProvider = str("AUTH_PROVIDER", "mock") === "oidc" ? "oidc" : "mock";
   const repoRoot = findRepoRoot();
   const fsRoot = str("STORAGE_FS_ROOT", ".data/storage");
+  const defaultExpiryDays = num("DEFAULT_EXPIRY_DAYS", 7);
+  if (!Number.isInteger(defaultExpiryDays) || defaultExpiryDays < 1 || defaultExpiryDays > MAX_EXPIRY_DAYS) {
+    throw new Error(`DEFAULT_EXPIRY_DAYS must be a whole number from 1 to ${MAX_EXPIRY_DAYS} (got ${defaultExpiryDays}).`);
+  }
 
   return {
     nodeEnv,
@@ -145,7 +150,7 @@ function buildConfig(): Config {
     oidcClientId: str("OIDC_CLIENT_ID", ""),
     oidcClientSecret: str("OIDC_CLIENT_SECRET", ""),
     adminEmails: list("ADMIN_EMAILS", ""),
-    defaultExpiryDays: num("DEFAULT_EXPIRY_DAYS", 30),
+    defaultExpiryDays,
     expiredRetentionDays: num("EXPIRED_RETENTION_DAYS", 30),
     cliTokenTtlDays: num("CLI_TOKEN_TTL_DAYS", 90),
     maxFiles: num("MAX_FILES", 5000),

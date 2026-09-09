@@ -10,13 +10,54 @@ import {
   normalizePath,
   suggestPathFromFile,
 } from "@drop/core/paths"
+import { EXPIRY_PRESET_DAYS, type Expiry } from "@drop/core/expiry"
 import { Button } from "@workspace/ui/components/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
+import { Input } from "@workspace/ui/components/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 import { Switch } from "@workspace/ui/components/switch"
 
 import { copyText } from "@/components/copy-button"
+import {
+  CUSTOM_EXPIRY_HINT,
+  CustomExpiryDialog,
+  ExpiryMenuItems,
+  customExpiry,
+} from "@/components/expiry-menu"
 import { formatBytes, expiryLabel } from "@/lib/time"
 
-type Expiry = "30d" | "never"
+/** One of the preset buttons, "custom" for a typed day count, or null to keep a Drop's current expiry. */
+type ExpiryChoice = `${(typeof EXPIRY_PRESET_DAYS)[number]}d` | "never" | "custom" | null
+
+const DEFAULT_EXPIRY_CHOICE: ExpiryChoice = "7d"
+
+/** Select value standing in for "keep this Drop's current expiry" (a null choice). */
+const KEEP_EXPIRY = "keep"
+
+type ExpirySelectValue = Exclude<ExpiryChoice, null> | typeof KEEP_EXPIRY
+
+function isExpirySelectValue(value: unknown): value is ExpirySelectValue {
+  return typeof value === "string" && value in expiryItems
+}
+
+const expiryItems: Record<ExpirySelectValue, string> = {
+  [KEEP_EXPIRY]: "Keep current expiry",
+  "7d": "7 days",
+  "30d": "30 days",
+  "60d": "60 days",
+  custom: "Custom",
+  never: "Never",
+}
 
 interface PickedFile {
   path: string
@@ -192,7 +233,11 @@ export function Publisher({
   const [path, setPath] = React.useState(initialPath)
   // Once the user has typed a name, a new drop must not overwrite it.
   const [pathEdited, setPathEdited] = React.useState(Boolean(initialPath))
-  const [expiry, setExpiry] = React.useState<Expiry | null>(initialPath ? null : "30d")
+  const [expiryChoice, setExpiryChoice] = React.useState<ExpiryChoice>(
+    initialPath ? null : DEFAULT_EXPIRY_CHOICE,
+  )
+  const [customDays, setCustomDays] = React.useState("")
+  const [customOpen, setCustomOpen] = React.useState(false)
   const [spa, setSpa] = React.useState(false)
   const [showMore, setShowMore] = React.useState(false)
   const [dragging, setDragging] = React.useState(false)
@@ -220,7 +265,12 @@ export function Publisher({
   const taken = availability?.path === path && availability.availability === "taken"
   const replacing = availability?.path === path && availability.availability === "yours"
   const hasHomePage = selection?.kind === "zip" || Boolean(selection?.home)
-  const canPublish = Boolean(selection) && hasHomePage && !pathError && !taken && !busy
+  // null: keep the Drop's current expiry, or a custom count that is not valid yet.
+  const expiry: Expiry | null = expiryChoice === "custom" ? customExpiry(customDays) : expiryChoice
+  const customInvalid = expiryChoice === "custom" && customDays.trim() !== "" && expiry === null
+  const customMissing = expiryChoice === "custom" && expiry === null
+  const canPublish =
+    Boolean(selection) && hasHomePage && !pathError && !taken && !customMissing && !busy
 
   /** Take a new selection. `fresh` starts over, as after a finished publish. */
   function choose(next: Selection | null, fresh = false) {
@@ -395,9 +445,8 @@ export function Publisher({
     }
   }
 
-  async function changeExpiry() {
+  async function changeExpiry(next: Expiry) {
     if (!result) return
-    const next: Expiry = result.expires_at === null ? "30d" : "never"
     const response = await fetch(`/api/sites/${encodeURIComponent(result.path)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -416,7 +465,9 @@ export function Publisher({
     setResult(null)
     setPath("")
     setPathEdited(false)
-    setExpiry("30d")
+    setExpiryChoice(DEFAULT_EXPIRY_CHOICE)
+    setCustomDays("")
+    setCustomOpen(false)
     setSpa(false)
     setShowMore(false)
     setFailure(null)
@@ -461,14 +512,30 @@ export function Publisher({
         <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
           <span className="flex items-center gap-2">
             {expiryLabel(result.expires_at, result.status)}
-            <button
-              type="button"
-              onClick={() => void changeExpiry()}
-              className="rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
-            >
-              change
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    className="rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
+                  />
+                }
+              >
+                change
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <ExpiryMenuItems
+                  onPick={(next) => void changeExpiry(next)}
+                  onCustom={() => setCustomOpen(true)}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
           </span>
+          <CustomExpiryDialog
+            open={customOpen}
+            onOpenChange={setCustomOpen}
+            onSubmit={(next) => void changeExpiry(next)}
+          />
           <button
             type="button"
             onClick={reset}
@@ -590,23 +657,51 @@ export function Publisher({
       </div>
 
       <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-        <div className="flex items-center gap-1" role="group" aria-label="Expiry">
-          <Button
-            variant={expiry === "30d" ? "secondary" : "ghost"}
-            size="sm"
-            aria-pressed={expiry === "30d"}
-            onClick={() => setExpiry("30d")}
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="drop-expiry" className="sr-only">
+            Expiry
+          </label>
+          <Select
+            items={expiryItems}
+            value={expiryChoice ?? KEEP_EXPIRY}
+            onValueChange={(value) => {
+              // The Select only emits values it was given, so the lookup is a type narrowing, not a guess.
+              const choice = isExpirySelectValue(value) && value !== KEEP_EXPIRY ? value : null
+              setExpiryChoice(choice)
+            }}
           >
-            Expires in 30 days
-          </Button>
-          <Button
-            variant={expiry === "never" ? "secondary" : "ghost"}
-            size="sm"
-            aria-pressed={expiry === "never"}
-            onClick={() => setExpiry("never")}
-          >
-            Never
-          </Button>
+            <SelectTrigger id="drop-expiry" size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {initialPath ? <SelectItem value={KEEP_EXPIRY}>{expiryItems[KEEP_EXPIRY]}</SelectItem> : null}
+              {EXPIRY_PRESET_DAYS.map((days) => (
+                <SelectItem key={days} value={`${days}d`}>
+                  {days} days
+                </SelectItem>
+              ))}
+              <SelectItem value="custom">Custom</SelectItem>
+              <SelectItem value="never">Never</SelectItem>
+            </SelectContent>
+          </Select>
+          {expiryChoice === "custom" ? (
+            <span className="flex items-center gap-1.5">
+              <label htmlFor="drop-expiry-days" className="sr-only">
+                Days until expiry
+              </label>
+              <Input
+                id="drop-expiry-days"
+                inputMode="numeric"
+                autoComplete="off"
+                autoFocus
+                value={customDays}
+                aria-invalid={customInvalid || undefined}
+                onChange={(event) => setCustomDays(event.target.value)}
+                className="h-8 w-16 text-center"
+              />
+              <span className="text-sm text-muted-foreground">days</span>
+            </span>
+          ) : null}
         </div>
 
         <Button
@@ -625,10 +720,14 @@ export function Publisher({
         </div>
       </div>
 
-      {expiry === null ? (
+      {expiryChoice === null ? (
         <p className="mt-3 text-[13px] text-muted-foreground">
           Keeping this Drop&rsquo;s current expiry unless you choose one.
         </p>
+      ) : customInvalid ? (
+        <p className="mt-3 text-[13px] text-destructive">{CUSTOM_EXPIRY_HINT}</p>
+      ) : expiryChoice === "custom" ? (
+        <p className="mt-3 text-[13px] text-muted-foreground">{CUSTOM_EXPIRY_HINT}</p>
       ) : null}
 
       {showMore ? (

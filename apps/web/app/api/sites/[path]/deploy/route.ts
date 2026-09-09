@@ -7,6 +7,8 @@ import {
   toSiteJson,
   validateArchive,
   validatePath,
+  MAX_EXPIRY_DAYS,
+  parseExpiry,
   type Expiry,
 } from "@drop/core"
 import { error, json, withUser } from "@/lib/api"
@@ -61,10 +63,11 @@ export const POST = withUser<Ctx>(async (request, user, { params }) => {
   const expiryRaw = form.get("expiry")
   let expiry: Expiry | undefined
   if (typeof expiryRaw === "string" && expiryRaw !== "") {
-    if (expiryRaw !== "30d" && expiryRaw !== "never") {
-      return error("invalid_expiry", 'expiry must be "30d" or "never".', 400)
+    const parsed = parseExpiry(expiryRaw)
+    if (!parsed) {
+      return error("invalid_expiry", `expiry must be "<days>d" (1 to ${MAX_EXPIRY_DAYS}) or "never".`, 400)
     }
-    expiry = expiryRaw
+    expiry = parsed
   }
 
   const spaRaw = form.get("spa")

@@ -10,11 +10,12 @@ Usage
   drop whoami [--json]             Show who you are signed in as
 
 Deploy options
-  --path <name>   Path to publish under (default: suggested from the folder or file name)
-  --permanent     Never expire (default: expires in 30 days)
-  --spa           Serve index.html for unknown routes
-  --yes, -y       Skip prompts (use the suggested path)
-  --json          Print one line of JSON on stdout
+  --path <name>     Path to publish under (default: suggested from the folder or file name)
+  --expires <days>  Expire after this many days, 1 to 365 (default: 7)
+  --permanent       Never expire
+  --spa             Serve index.html for unknown routes
+  --yes, -y         Skip prompts (use the suggested path)
+  --json            Print one line of JSON on stdout
 
 Global options
   --url <controlUrl>   Drop control URL for this command
@@ -32,6 +33,7 @@ assets relatively - sites are served under /<path>/.
 Examples
   drop deploy ./dist --path route-optimizer
   drop deploy ./out --permanent --json
+  drop deploy ./dist --path launch --expires 60
   drop deploy report.html
   drop deploy site.zip --path launch
 `;

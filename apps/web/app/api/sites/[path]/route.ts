@@ -6,14 +6,14 @@ import {
   normalizePath,
   toSiteJson,
   updateSite,
+  MAX_EXPIRY_DAYS,
+  parseExpiry,
   type Expiry,
 } from "@drop/core"
 import { error, json, notFound, readJson, withUser } from "@/lib/api"
 import { userIsAdmin } from "@/lib/auth"
 
 type Ctx = { params: Promise<{ path: string }> }
-
-const EXPIRY_VALUES = new Set(["30d", "never"])
 
 export const GET = withUser<Ctx>(async (_request, user, { params }) => {
   const { path } = await params
@@ -29,10 +29,11 @@ export const PATCH = withUser<Ctx>(async (request, user, { params }) => {
 
   let expiry: Expiry | undefined
   if (body.expiry !== undefined) {
-    if (typeof body.expiry !== "string" || !EXPIRY_VALUES.has(body.expiry)) {
-      return error("invalid_expiry", 'expiry must be "30d" or "never".', 400)
+    const parsed = parseExpiry(body.expiry)
+    if (!parsed) {
+      return error("invalid_expiry", `expiry must be "<days>d" (1 to ${MAX_EXPIRY_DAYS}) or "never".`, 400)
     }
-    expiry = body.expiry as Expiry
+    expiry = parsed
   }
 
   let spa: boolean | undefined

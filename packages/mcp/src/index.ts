@@ -51,8 +51,8 @@ server.registerTool(
       "reference in the HTML must be relative ('./assets/app.js', not '/assets/app.js'); for " +
       "Vite set base: './', for Next.js use output: 'export' with basePath/assetPrefix, for Astro " +
       "set base. Returns { url, path, expires_at, warnings } - give the url back to the user. " +
-      "Sites expire in 30 days unless permanent is true. If the result says the path is owned by " +
-      "someone else, retry with a different path.",
+      "Sites expire in 7 days unless expiresInDays (1 to 365) or permanent is set. If the result " +
+      "says the path is owned by someone else, retry with a different path.",
     inputSchema: {
       folder: z
         .string()
@@ -67,16 +67,30 @@ server.registerTool(
           "URL path to publish under: lowercase letters, numbers and hyphens (e.g. 'route-optimizer'). " +
             "Defaults to a name derived from the folder.",
         ),
-      permanent: z.boolean().optional().describe("Never expire. Default: expires in 30 days."),
+      expiresInDays: z
+        .number()
+        .int()
+        .min(1)
+        .max(365)
+        .optional()
+        .describe("Expire after this many whole days, 1 to 365. Default: 7. Not with permanent."),
+      permanent: z
+        .boolean()
+        .optional()
+        .describe("Never expire. Default: expires in 7 days. Not with expiresInDays."),
       spa: z
         .boolean()
         .optional()
         .describe("Serve index.html for unknown routes (client-side routing)."),
     },
   },
-  async ({ folder, path, permanent, spa }) => {
+  async ({ folder, path, expiresInDays, permanent, spa }) => {
+    if (permanent && expiresInDays !== undefined) {
+      return text("Pass expiresInDays or permanent, not both.", true);
+    }
     const args = ["deploy", folder];
     if (path) args.push("--path", path);
+    if (expiresInDays !== undefined) args.push("--expires", String(expiresInDays));
     if (permanent) args.push("--permanent");
     if (spa) args.push("--spa");
     return await call(args);

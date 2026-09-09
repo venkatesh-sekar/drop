@@ -68,7 +68,8 @@ terminal, and then retry.
 ## 3. Everyday use
 
 ```bash
-drop deploy ./dist --path route-optimizer     # publish (expires in 30 days)
+drop deploy ./dist --path route-optimizer     # publish (expires in 7 days)
+drop deploy ./dist --path launch --expires 60         # 1 to 365 days
 drop deploy ./dist --path dashboard --permanent
 drop deploy ./dist --path app --spa           # index.html for unknown routes
 drop list                                     # your sites
@@ -92,7 +93,7 @@ drop deploy ./dist --path route-optimizer --json --yes
 ```
 
 ```json
-{"url":"https://sites.internal/route-optimizer/","path":"route-optimizer","expires_at":"2026-10-09T12:00:00.000Z","warnings":[]}
+{"url":"https://sites.internal/route-optimizer/","path":"route-optimizer","expires_at":"2026-09-16T12:00:00.000Z","warnings":[]}
 ```
 
 On failure stdout is `{"error":"...","message":"..."}` and the exit code is 1

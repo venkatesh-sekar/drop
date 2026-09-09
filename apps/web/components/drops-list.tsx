@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import type { Expiry } from "@drop/core/expiry"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons"
 import { Button } from "@workspace/ui/components/button"
@@ -20,6 +21,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -27,6 +29,11 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 
 import { copyText } from "@/components/copy-button"
+import {
+  CustomExpiryDialog,
+  ExpiryMenuItems,
+  expiryChangedMessage,
+} from "@/components/expiry-menu"
 
 export interface DropRow {
   path: string
@@ -41,8 +48,9 @@ export function DropsList({ rows }: { rows: DropRow[] }) {
   const router = useRouter()
   const [pending, setPending] = React.useState<string | null>(null)
   const [confirming, setConfirming] = React.useState<DropRow | null>(null)
+  const [customFor, setCustomFor] = React.useState<DropRow | null>(null)
 
-  async function setExpiry(row: DropRow, expiry: "30d" | "never") {
+  async function setExpiry(row: DropRow, expiry: Expiry) {
     setPending(row.path)
     const response = await fetch(`/api/sites/${encodeURIComponent(row.path)}`, {
       method: "PATCH",
@@ -54,7 +62,7 @@ export function DropsList({ rows }: { rows: DropRow[] }) {
       toast.error("Could not change the expiry.")
       return
     }
-    toast.success(expiry === "never" ? "Now permanent" : "Expires in 30 days")
+    toast.success(expiryChangedMessage(expiry))
     router.refresh()
   }
 
@@ -121,13 +129,13 @@ export function DropsList({ rows }: { rows: DropRow[] }) {
                     Redeploy
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Expiry</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => void setExpiry(row, "30d")}>
-                    30 days
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void setExpiry(row, "never")}>
-                    Never
-                  </DropdownMenuItem>
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Expiry</DropdownMenuLabel>
+                    <ExpiryMenuItems
+                      onPick={(expiry) => void setExpiry(row, expiry)}
+                      onCustom={() => setCustomFor(row)}
+                    />
+                  </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" onClick={() => setConfirming(row)}>
                     Delete
@@ -138,6 +146,12 @@ export function DropsList({ rows }: { rows: DropRow[] }) {
           </li>
         ))}
       </ul>
+
+      <CustomExpiryDialog
+        open={customFor !== null}
+        onOpenChange={(open) => !open && setCustomFor(null)}
+        onSubmit={(expiry) => customFor && void setExpiry(customFor, expiry)}
+      />
 
       <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
         <AlertDialogContent>

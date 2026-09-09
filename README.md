@@ -60,14 +60,14 @@ drop login --url http://localhost:3100      # opens the browser once, stores a t
 drop deploy examples/hello --path hello
 ```
 
-`drop deploy report.html` publishes one file on its own. Options: `--path`, `--permanent`, `--spa`, `--json`, `--yes`. See `docs/agents.md` for the MCP server, the skill, and CI usage with `DROP_TOKEN`.
+`drop deploy report.html` publishes one file on its own. Options: `--path`, `--expires <days>`, `--permanent`, `--spa`, `--json`, `--yes`. See `docs/agents.md` for the MCP server, the skill, and CI usage with `DROP_TOKEN`.
 
 ## How it works
 
 - **Auth.** Humans sign in through an OIDC provider (`AUTH_PROVIDER=oidc`) or the development mock. The CLI signs in with a device-style flow: it opens the browser, you approve once, and it stores a token locally. Agents only ever run `drop`; they never see credentials.
 - **Publishing.** The client zips the folder and posts it. The server validates paths and limits, uploads every file under a fresh prefix in object storage, then switches the site to that prefix in one database update. Nobody sees a half-uploaded site.
 - **Ownership.** The first user to publish a path owns it. Others get a clear error. Deleting a site frees the path.
-- **Expiry.** Sites expire after 30 days unless published with `--permanent` or set to Never. Expired sites stop being served but keep their path for the owner. `pnpm cleanup` marks expired sites and later removes their files.
+- **Expiry.** Sites expire after 7 days by default. The web UI, `drop deploy --expires <days>` and the MCP `expiresInDays` option accept any whole number of days up to 365; `--permanent` or Never keeps a site forever. Expired sites stop being served but keep their path for the owner. `pnpm cleanup` marks expired sites and later removes their files.
 - **Isolation.** The control app and published sites live on different origins, so uploaded JavaScript can never touch Drop's session.
 
 ## Production
