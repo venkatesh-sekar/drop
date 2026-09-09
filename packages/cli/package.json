@@ -1,0 +1,31 @@
+{
+  "name": "@drop/cli",
+  "version": "0.0.1",
+  "description": "Drop a folder. Get a URL.",
+  "type": "module",
+  "bin": {
+    "drop": "./dist/drop.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@workspace/typescript-config": "workspace:*",
+    "tsup": "^8.5.0",
+    "typescript": "^5",
+    "vitest": "^2.1.8"
+  }
+}

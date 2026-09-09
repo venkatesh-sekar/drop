@@ -1,0 +1,32 @@
+{
+  "name": "@drop/mcp",
+  "version": "0.0.1",
+  "description": "MCP stdio server for Drop",
+  "type": "module",
+  "bin": {
+    "drop-mcp": "./dist/drop-mcp.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@workspace/typescript-config": "workspace:*",
+    "tsup": "^8.5.0",
+    "typescript": "^5",
+    "vitest": "^2.1.8"
+  }
+}
